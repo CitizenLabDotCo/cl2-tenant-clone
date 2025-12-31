@@ -9,8 +9,8 @@ namespace :clone do
     end
 
     dumper = TenantDumper.new
-    dump_path = dumper.dump(args[:source_host])
+    dump_dir = dumper.dump(args[:source_host])
 
-    puts "✓ Dump completed: #{dump_path}"
+    puts "✓ Dump completed: #{dump_dir}"
   end
 end
