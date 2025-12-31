@@ -37,10 +37,6 @@ class TenantDumper
   def build_dump_command(schema_name, dump_file)
     [
       'pg_dump',
-      '--host', ENV.fetch('POSTGRES_HOST'),
-      '--port', ENV.fetch('POSTGRES_PORT'),
-      '--username', ENV.fetch('POSTGRES_USER'),
-      '--dbname', ENV.fetch('POSTGRES_DB'),
       '--schema', schema_name,
       '--no-owner',
       '--no-acl',
