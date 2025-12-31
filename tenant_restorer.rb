@@ -40,11 +40,7 @@ class TenantRestorer
     puts "Generating new UUIDs..."
     mapping = {}
     uuids.each { |old_uuid| mapping[old_uuid] = SecureRandom.uuid }
-
-    # Save mapping for reference
-    mapping_file = File.join(dump_dir, 'uuid_mapping.json')
-    File.write(mapping_file, JSON.pretty_generate(mapping))
-    puts "✓ UUID mapping saved (#{mapping.size} mappings)"
+    puts "✓ Generated #{mapping.size} UUID mappings"
 
     mapping
   end
