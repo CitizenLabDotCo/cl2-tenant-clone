@@ -1,0 +1,15 @@
+# Environment
+.env
+
+# Temporary files
+tmp/
+
+# macOS
+*.DS_Store
+
+# Debugger
+.byebug_history
+
+# IDE
+.idea/
+.vscode/
