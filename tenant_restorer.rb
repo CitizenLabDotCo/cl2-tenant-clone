@@ -12,12 +12,21 @@ class TenantRestorer
     original_dump = File.join(dump_dir, 'dump.sql')
     working_dump = File.join(dump_dir, 'dump_transformed.sql')
 
+    # Load source tenant info
+    source_tenant = load_source_tenant(dump_dir)
+    source_schema = host_to_schema(source_tenant['host'])
+    target_schema = host_to_schema(target_host)
+
     puts "Starting restore for clone #{clone_id}"
+    puts "Schema: #{source_schema} → #{target_schema}"
 
     # Step 1: Copy original dump to working file
     copy_dump(original_dump, working_dump)
 
-    # Step 2: Generate UUID mappings and replace
+    # Step 2: Replace schema names
+    replace_schema_in_file(working_dump, source_schema, target_schema)
+
+    # Step 3: Generate UUID mappings and replace
     uuid_mapping = generate_uuid_mapping(original_dump, dump_dir)
     replace_uuids_in_file(working_dump, uuid_mapping)
 
@@ -26,10 +35,31 @@ class TenantRestorer
 
   private
 
+  def load_source_tenant(dump_dir)
+    tenant_file = File.join(dump_dir, 'tenant.json')
+    JSON.parse(File.read(tenant_file))
+  end
+
+  def host_to_schema(host)
+    # Convert host to schema name (e.g., "demo.localhost" -> "demo_localhost")
+    host.gsub('.', '_')
+  end
+
   def copy_dump(source, destination)
     puts "Copying dump..."
     FileUtils.cp(source, destination)
     puts "✓ Dump copied to working file"
+  end
+
+  def replace_schema_in_file(dump_file, source_schema, target_schema)
+    puts "Replacing schema '#{source_schema}' with '#{target_schema}'..."
+
+    # Note: Loads entire file into memory - may not be efficient for very large dumps
+    content = File.read(dump_file)
+    transformed = content.gsub(/\b#{Regexp.escape(source_schema)}\b/, target_schema)
+    File.write(dump_file, transformed)
+
+    puts "✓ Schema replaced"
   end
 
   def generate_uuid_mapping(dump_file, dump_dir)
@@ -82,20 +112,13 @@ class TenantRestorer
   def replace_uuids_in_file(dump_file, uuid_mapping)
     puts "Replacing UUIDs in dump..."
 
-    # Read and transform in one pass
-    temp_file = "#{dump_file}.tmp"
-    File.open(temp_file, 'w') do |out|
-      File.foreach(dump_file) do |line|
-        transformed = line
-        uuid_mapping.each do |old_uuid, new_uuid|
-          transformed = transformed.gsub(/\b#{old_uuid}\b/i, new_uuid)
-        end
-        out.write(transformed)
-      end
+    # Note: Loads entire file into memory - may not be efficient for very large dumps
+    content = File.read(dump_file)
+    uuid_mapping.each do |old_uuid, new_uuid|
+      content = content.gsub(/\b#{old_uuid}\b/i, new_uuid)
     end
+    File.write(dump_file, content)
 
-    # Replace original with transformed
-    FileUtils.mv(temp_file, dump_file)
     puts "✓ UUIDs replaced"
   end
 end
