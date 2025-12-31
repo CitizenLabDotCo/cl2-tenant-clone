@@ -1,0 +1,15 @@
+# This docker-compose file is intended for development purposes only
+version: '3'
+services:
+  cl2-tenant-clone:
+    build: .
+    tty: true
+    stdin_open: true
+    volumes:
+      - .:/cl2-tenant-clone
+    env_file:
+      - .env
+networks:
+  default:
+    external:
+      name: citizenlab
