@@ -1,4 +1,5 @@
 require_relative '../../tenant_dumper'
+require_relative '../../tenant_restorer'
 
 namespace :clone do
   desc "Dump a tenant schema to local file"
@@ -12,5 +13,18 @@ namespace :clone do
     dump_dir = dumper.dump(args[:source_host])
 
     puts "✓ Dump completed: #{dump_dir}"
+  end
+
+  desc "Restore a tenant from dump"
+  task :restore, [:clone_id, :target_host] do |t, args|
+    if !args[:clone_id] || !args[:target_host]
+      puts "Usage: rake clone:restore[clone-id,target.localhost]"
+      exit 1
+    end
+
+    restorer = TenantRestorer.new
+    restorer.restore(args[:clone_id], args[:target_host])
+
+    puts "✓ Restore completed"
   end
 end
