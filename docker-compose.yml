@@ -9,6 +9,14 @@ services:
       - .:/cl2-tenant-clone
     env_file:
       - .env
+
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - DEBUG=0
 networks:
   default:
     external:

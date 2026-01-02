@@ -5,11 +5,19 @@ class S3FilesCopier
   def initialize(source_bucket:, dest_bucket:, region:)
     @source_bucket = source_bucket
     @dest_bucket = dest_bucket
-    @s3_client = Aws::S3::Client.new(
+    client_options = {
       region: region,
       access_key_id: ENV['AWS_ACCESS_KEY_ID'],
       secret_access_key: ENV['AWS_SECRET_ACCESS_KEY']
-    )
+    }
+
+    # If AWS_ENDPOINT_URL is set (for LocalStack in tests), use it
+    if ENV['AWS_ENDPOINT_URL']
+      client_options[:endpoint] = ENV['AWS_ENDPOINT_URL']
+      client_options[:force_path_style] = true
+    end
+
+    @s3_client = Aws::S3::Client.new(client_options)
   end
 
   # Dump: Copy tenant files to clone bucket

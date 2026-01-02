@@ -36,6 +36,7 @@ GEM
       ffi (~> 1.0)
     rerun (0.14.0)
       listen (~> 3.0)
+    rexml (3.4.4)
     rspec (3.13.2)
       rspec-core (~> 3.13.0)
       rspec-expectations (~> 3.13.0)
@@ -58,6 +59,7 @@ DEPENDENCIES
   byebug
   rake
   rerun
+  rexml
   rspec (~> 3.13)
 
 BUNDLED WITH

@@ -4,11 +4,19 @@ require 'fileutils'
 class S3Uploader
   def initialize(bucket:, region:)
     @bucket = bucket
-    @s3_client = Aws::S3::Client.new(
+    client_options = {
       region: region,
       access_key_id: ENV['AWS_ACCESS_KEY_ID'],
       secret_access_key: ENV['AWS_SECRET_ACCESS_KEY']
-    )
+    }
+
+    # If AWS_ENDPOINT_URL is set (for LocalStack in tests), use it
+    if ENV['AWS_ENDPOINT_URL']
+      client_options[:endpoint] = ENV['AWS_ENDPOINT_URL']
+      client_options[:force_path_style] = true
+    end
+
+    @s3_client = Aws::S3::Client.new(client_options)
   end
 
   def upload_file(local_path:, s3_key:)
