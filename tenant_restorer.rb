@@ -2,6 +2,7 @@ require 'fileutils'
 require 'securerandom'
 require 'json'
 require 'set'
+require_relative 'tenant_helpers'
 
 class TenantRestorer
   UUID_REGEX = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i
@@ -14,8 +15,8 @@ class TenantRestorer
 
     # Load source tenant info
     source_tenant = load_source_tenant(dump_dir)
-    source_schema = host_to_schema(source_tenant['host'])
-    target_schema = host_to_schema(target_host)
+    source_schema = TenantHelpers.host_to_schema(source_tenant['host'])
+    target_schema = TenantHelpers.host_to_schema(target_host)
 
     puts "Starting restore for clone #{clone_id}"
     puts "Schema: #{source_schema} → #{target_schema}"
@@ -38,11 +39,6 @@ class TenantRestorer
   def load_source_tenant(dump_dir)
     tenant_file = File.join(dump_dir, 'tenant.json')
     JSON.parse(File.read(tenant_file))
-  end
-
-  def host_to_schema(host)
-    # Convert host to schema name (e.g., "demo.localhost" -> "demo_localhost")
-    host.gsub('.', '_')
   end
 
   def copy_dump(source, destination)

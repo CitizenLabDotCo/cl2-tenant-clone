@@ -1,6 +1,7 @@
 require 'fileutils'
 require 'securerandom'
 require 'json'
+require_relative 'tenant_helpers'
 
 class TenantDumper
   DUMPS_DIR = './tmp/dumps'
@@ -11,7 +12,7 @@ class TenantDumper
 
   def dump(source_host)
     clone_id = SecureRandom.uuid
-    schema_name = host_to_schema(source_host)
+    schema_name = TenantHelpers.host_to_schema(source_host)
     dump_dir = File.join(DUMPS_DIR, clone_id)
     FileUtils.mkdir_p(dump_dir)
 
@@ -47,11 +48,6 @@ class TenantDumper
     File.write(tenant_file, JSON.pretty_generate(tenant_data))
 
     puts "✓ Tenant data saved"
-  end
-
-  def host_to_schema(host)
-    # Convert host to schema name (e.g., "demo.localhost" -> "demo_localhost")
-    host.gsub('.', '_')
   end
 
   def build_dump_command(schema_name, dump_file)
