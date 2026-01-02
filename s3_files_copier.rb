@@ -16,15 +16,16 @@ class S3FilesCopier
   # Dump: Copy tenant files to clone bucket
   # Source: uploads/{source_tenant_id}/**
   # Dest: {clone_id}/uploads/**
+  # TODO: For large numbers of files, consider optimizing with:
+  #   - AWS CLI: aws s3 cp s3://source/prefix s3://dest/prefix --recursive
+  #   - Parallel gem: Parallel.each(objects, in_threads: 10) { ... }
   def copy_to_clone_bucket(source_tenant_id:, clone_id:)
     count = 0
     source_prefix = "uploads/#{source_tenant_id}/"
 
     puts "  Listing objects in tenant bucket..."
-    $stdout.flush
     objects = list_objects(@source_bucket, source_prefix)
     puts "  Found #{objects.size} objects to copy"
-    $stdout.flush
 
     objects.each do |object|
       source_key = object.key
@@ -46,10 +47,7 @@ class S3FilesCopier
         count += 1
 
         # Progress indicator every 50 files
-        if count % 50 == 0
-          puts "  Copied #{count} files..."
-          $stdout.flush
-        end
+        puts "  Copied #{count} files..." if count % 50 == 0
       rescue Aws::S3::Errors::NoSuchKey => e
         # File was deleted between listing and copying, skip it
         puts "  Skipped missing file: #{source_key}"
@@ -67,10 +65,8 @@ class S3FilesCopier
     source_prefix = "#{clone_id}/uploads/"
 
     puts "  Listing objects in clone bucket..."
-    $stdout.flush
     objects = list_objects(@source_bucket, source_prefix)
     puts "  Found #{objects.size} objects to copy"
-    $stdout.flush
 
     objects.each do |object|
       source_key = object.key
@@ -96,10 +92,7 @@ class S3FilesCopier
         count += 1
 
         # Progress indicator every 50 files
-        if count % 50 == 0
-          puts "  Copied #{count} files..."
-          $stdout.flush
-        end
+        puts "  Copied #{count} files..." if count % 50 == 0
       rescue Aws::S3::Errors::NoSuchKey => e
         # File was deleted between listing and copying, skip it
         puts "  Skipped missing file: #{source_key}"

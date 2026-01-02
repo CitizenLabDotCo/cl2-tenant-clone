@@ -97,7 +97,6 @@ class TenantRestorer
 
   def copy_s3_files_from_clone_bucket(clone_id, target_tenant_id, uuid_mapping)
     puts "Copying S3 files with UUID mapping..."
-    $stdout.flush
     copier = S3FilesCopier.new(
       source_bucket: ENV['AWS_S3_CLONE_BUCKET'],
       dest_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
@@ -109,7 +108,6 @@ class TenantRestorer
       uuid_mapping: uuid_mapping
     )
     puts "✓ Copied #{count} files from S3 with UUID mapping"
-    $stdout.flush
   end
 
   def copy_dump(source, destination)

@@ -64,18 +64,15 @@ class TenantDumper
 
   def fetch_and_upload_tenant_data(host, clone_id)
     puts "Fetching tenant row for '#{host}'..."
-    $stdout.flush
 
     # Fetch tenant data into memory
     tenant_data = fetch_tenant_row(host)
     tenant_json = JSON.pretty_generate(tenant_data)
 
     puts "✓ Tenant data fetched"
-    $stdout.flush
 
     # Upload directly to S3 (no local file)
     puts "Uploading tenant metadata to S3..."
-    $stdout.flush
 
     s3_client = Aws::S3::Client.new(
       region: ENV['AWS_REGION'],
@@ -89,14 +86,12 @@ class TenantDumper
     )
 
     puts "✓ Tenant metadata uploaded to S3"
-    $stdout.flush
 
     tenant_data
   end
 
   def copy_s3_files_to_clone_bucket(source_tenant_id, clone_id)
     puts "Copying S3 files to clone bucket..."
-    $stdout.flush
     copier = S3FilesCopier.new(
       source_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
       dest_bucket: ENV['AWS_S3_CLONE_BUCKET'],
@@ -107,7 +102,6 @@ class TenantDumper
       clone_id: clone_id
     )
     puts "✓ Copied #{count} files to S3"
-    $stdout.flush
   end
 
   def build_dump_command(schema_name, dump_file)
