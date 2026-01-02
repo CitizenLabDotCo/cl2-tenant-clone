@@ -23,6 +23,7 @@ GEM
     base64 (0.3.0)
     bigdecimal (4.0.1)
     byebug (12.0.0)
+    diff-lcs (1.6.2)
     ffi (1.17.3-aarch64-linux-gnu)
     jmespath (1.6.2)
     listen (3.9.0)
@@ -35,6 +36,19 @@ GEM
       ffi (~> 1.0)
     rerun (0.14.0)
       listen (~> 3.0)
+    rspec (3.13.2)
+      rspec-core (~> 3.13.0)
+      rspec-expectations (~> 3.13.0)
+      rspec-mocks (~> 3.13.0)
+    rspec-core (3.13.6)
+      rspec-support (~> 3.13.0)
+    rspec-expectations (3.13.5)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-mocks (3.13.7)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-support (3.13.6)
 
 PLATFORMS
   aarch64-linux
@@ -44,6 +58,7 @@ DEPENDENCIES
   byebug
   rake
   rerun
+  rspec (~> 3.13)
 
 BUNDLED WITH
    2.4.19
