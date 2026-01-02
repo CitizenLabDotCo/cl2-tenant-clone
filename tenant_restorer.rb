@@ -31,7 +31,18 @@ class TenantRestorer
     uuid_mapping = generate_uuid_mapping(original_dump, dump_dir)
     replace_uuids_in_file(working_dump, uuid_mapping)
 
-    puts "✓ Restore preparation completed"
+    # Step 4: Restore dump to database
+    restore_dump_to_database(working_dump)
+
+    # Step 5: Create tenant row
+    new_tenant_id = uuid_mapping[source_tenant['id']]
+    if !new_tenant_id
+      puts "⚠ Warning: Tenant ID not found in UUID mapping, generating new UUID"
+      new_tenant_id = SecureRandom.uuid
+    end
+    create_tenant_row(source_tenant, target_host, new_tenant_id)
+
+    puts "✓ Restore completed"
   end
 
   private
@@ -116,5 +127,66 @@ class TenantRestorer
     File.write(dump_file, content)
 
     puts "✓ UUIDs replaced"
+  end
+
+  def restore_dump_to_database(dump_file)
+    puts "Restoring dump to database..."
+
+    success = system('psql', '-f', dump_file)
+
+    if !success
+      raise "psql failed with exit code #{$?.exitstatus}"
+    end
+
+    puts "✓ Dump restored to database"
+  end
+
+  def create_tenant_row(source_tenant, target_host, new_tenant_id)
+    puts "Creating tenant row..."
+
+    # Start with all source tenant data
+    new_tenant = source_tenant.dup
+
+    # Update only the fields that need to change
+    new_tenant['id'] = new_tenant_id
+    new_tenant['name'] = "#{source_tenant['name']} Copy"
+    new_tenant['host'] = target_host
+    now = Time.now.utc.iso8601
+    new_tenant['created_at'] = now
+    new_tenant['updated_at'] = now
+    # Note: creation_finalized_at is set here, but we may want to set this
+    # to cl2-tenant-setup service in the future.
+    new_tenant['creation_finalized_at'] = now
+
+    # Build INSERT dynamically from all keys
+    columns = new_tenant.keys.join(', ')
+    values = new_tenant.values.map { |v| quote_value(v) }.join(', ')
+
+    sql = "INSERT INTO public.tenants (#{columns}) VALUES (#{values});"
+
+    result = `psql -c "#{sql}"`
+
+    if $?.exitstatus != 0
+      raise "Failed to create tenant row"
+    end
+
+    puts "✓ Tenant row created: #{new_tenant['name']} (#{target_host})"
+  end
+
+  def quote_value(value)
+    case value
+    when nil
+      'NULL'
+    when Hash, Array
+      "'#{escape_sql(value.to_json)}'"
+    when String
+      "'#{escape_sql(value)}'"
+    else
+      "'#{escape_sql(value.to_s)}'"
+    end
+  end
+
+  def escape_sql(value)
+    value.to_s.gsub("'", "''")
   end
 end
