@@ -2,6 +2,7 @@ require 'fileutils'
 require 'securerandom'
 require 'json'
 require 'set'
+require 'time'
 require_relative 'tenant_helpers'
 
 class TenantRestorer
@@ -106,7 +107,7 @@ class TenantRestorer
       # Extract UUID from 'id' column in COPY data
       if in_copy_block && id_column_index
         values = line.split("\t")
-        id_value = values[id_column_index]
+        id_value = values[id_column_index]&.strip
         if id_value && id_value =~ UUID_REGEX
           uuids.add(id_value.downcase)
         end
