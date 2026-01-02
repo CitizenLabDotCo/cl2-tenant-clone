@@ -2,6 +2,8 @@ require 'fileutils'
 require 'securerandom'
 require 'json'
 require_relative 'tenant_helpers'
+require_relative 's3_uploader'
+require_relative 's3_files_copier'
 
 class TenantDumper
   DUMPS_DIR = './tmp/dumps'
@@ -13,41 +15,99 @@ class TenantDumper
   def dump(source_host)
     clone_id = SecureRandom.uuid
     schema_name = TenantHelpers.host_to_schema(source_host)
-    dump_dir = File.join(DUMPS_DIR, clone_id)
-    FileUtils.mkdir_p(dump_dir)
 
     puts "Clone ID: #{clone_id}"
 
-    dump_sql(schema_name, dump_dir)
-    save_tenant_data(source_host, dump_dir)
+    # Step 1: Dump SQL to temp file and upload to S3
+    dump_and_upload_sql(schema_name, clone_id)
 
-    dump_dir
+    # Step 2: Fetch tenant data and upload to S3 (no local file)
+    tenant_data = fetch_and_upload_tenant_data(source_host, clone_id)
+
+    # Step 3: Copy S3 files from tenant bucket to clone bucket
+    source_tenant_id = tenant_data['id']
+    copy_s3_files_to_clone_bucket(source_tenant_id, clone_id)
+
+    puts "✓ Dump completed and uploaded to S3"
+    clone_id
   end
 
   private
 
-  def dump_sql(schema_name, dump_dir)
-    dump_file = File.join(dump_dir, 'dump.sql')
+  def dump_and_upload_sql(schema_name, clone_id)
+    temp_file = "/tmp/dump-#{clone_id}.sql"
     puts "Dumping schema '#{schema_name}'..."
 
-    cmd = build_dump_command(schema_name, dump_file)
+    # Dump to temporary file
+    cmd = build_dump_command(schema_name, temp_file)
     success = system(cmd)
 
     if !success
+      FileUtils.rm_f(temp_file)
       raise "pg_dump failed with exit code #{$?.exitstatus}"
     end
 
-    puts "✓ SQL dump completed (#{File.size(dump_file)} bytes)"
+    puts "✓ SQL dump completed (#{File.size(temp_file)} bytes)"
+
+    # Upload to S3
+    puts "Uploading SQL dump to S3..."
+    uploader = S3Uploader.new(
+      bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      region: ENV['AWS_REGION']
+    )
+    uploader.upload_file(local_path: temp_file, s3_key: "#{clone_id}/dump.sql")
+    puts "✓ SQL dump uploaded to S3"
+
+    # Delete temporary file
+    FileUtils.rm_f(temp_file)
   end
 
-  def save_tenant_data(host, dump_dir)
+  def fetch_and_upload_tenant_data(host, clone_id)
     puts "Fetching tenant row for '#{host}'..."
+    $stdout.flush
 
+    # Fetch tenant data into memory
     tenant_data = fetch_tenant_row(host)
-    tenant_file = File.join(dump_dir, 'tenant.json')
-    File.write(tenant_file, JSON.pretty_generate(tenant_data))
+    tenant_json = JSON.pretty_generate(tenant_data)
 
-    puts "✓ Tenant data saved"
+    puts "✓ Tenant data fetched"
+    $stdout.flush
+
+    # Upload directly to S3 (no local file)
+    puts "Uploading tenant metadata to S3..."
+    $stdout.flush
+
+    s3_client = Aws::S3::Client.new(
+      region: ENV['AWS_REGION'],
+      access_key_id: ENV['AWS_ACCESS_KEY_ID'],
+      secret_access_key: ENV['AWS_SECRET_ACCESS_KEY']
+    )
+    s3_client.put_object(
+      bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      key: "#{clone_id}/tenant.json",
+      body: tenant_json
+    )
+
+    puts "✓ Tenant metadata uploaded to S3"
+    $stdout.flush
+
+    tenant_data
+  end
+
+  def copy_s3_files_to_clone_bucket(source_tenant_id, clone_id)
+    puts "Copying S3 files to clone bucket..."
+    $stdout.flush
+    copier = S3FilesCopier.new(
+      source_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
+      dest_bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      region: ENV['AWS_REGION']
+    )
+    count = copier.copy_to_clone_bucket(
+      source_tenant_id: source_tenant_id,
+      clone_id: clone_id
+    )
+    puts "✓ Copied #{count} files to S3"
+    $stdout.flush
   end
 
   def build_dump_command(schema_name, dump_file)

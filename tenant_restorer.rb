@@ -4,53 +4,112 @@ require 'json'
 require 'set'
 require 'time'
 require_relative 'tenant_helpers'
+require_relative 's3_uploader'
+require_relative 's3_files_copier'
 
 class TenantRestorer
   UUID_REGEX = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i
   DUMPS_DIR = './tmp/dumps'
 
   def restore(clone_id, target_host)
-    dump_dir = File.join(DUMPS_DIR, clone_id)
-    original_dump = File.join(dump_dir, 'dump.sql')
-    working_dump = File.join(dump_dir, 'dump_transformed.sql')
-
-    # Load source tenant info
-    source_tenant = load_source_tenant(dump_dir)
-    source_schema = TenantHelpers.host_to_schema(source_tenant['host'])
-    target_schema = TenantHelpers.host_to_schema(target_host)
+    original_dump = "/tmp/dump-#{clone_id}.sql"
+    working_dump = "/tmp/dump-#{clone_id}-transformed.sql"
 
     puts "Starting restore for clone #{clone_id}"
-    puts "Schema: #{source_schema} → #{target_schema}"
 
-    # Step 1: Copy original dump to working file
-    copy_dump(original_dump, working_dump)
+    begin
+      # Step 1: Download dump.sql from S3
+      download_dump_from_s3(clone_id, original_dump)
 
-    # Step 2: Replace schema names
-    replace_schema_in_file(working_dump, source_schema, target_schema)
+      # Step 2: Download tenant.json from S3
+      source_tenant = download_tenant_json_from_s3(clone_id)
 
-    # Step 3: Generate UUID mappings and replace
-    uuid_mapping = generate_uuid_mapping(original_dump, dump_dir)
-    replace_uuids_in_file(working_dump, uuid_mapping)
+      source_schema = TenantHelpers.host_to_schema(source_tenant['host'])
+      target_schema = TenantHelpers.host_to_schema(target_host)
+      puts "Schema: #{source_schema} → #{target_schema}"
 
-    # Step 4: Restore dump to database
-    restore_dump_to_database(working_dump)
+      # Step 3: Copy original dump to working file
+      copy_dump(original_dump, working_dump)
 
-    # Step 5: Create tenant row
-    new_tenant_id = uuid_mapping[source_tenant['id']]
-    if !new_tenant_id
-      puts "⚠ Warning: Tenant ID not found in UUID mapping, generating new UUID"
-      new_tenant_id = SecureRandom.uuid
+      # Step 4: Replace schema names
+      replace_schema_in_file(working_dump, source_schema, target_schema)
+
+      # Step 5: Generate UUID mappings and replace
+      uuid_mapping = generate_uuid_mapping(original_dump)
+      replace_uuids_in_file(working_dump, uuid_mapping)
+
+      # Step 6: Restore dump to database
+      restore_dump_to_database(working_dump)
+
+      # Step 7: Create tenant row
+      new_tenant_id = uuid_mapping[source_tenant['id']]
+      if !new_tenant_id
+        puts "⚠ Warning: Tenant ID not found in UUID mapping, generating new UUID"
+        new_tenant_id = SecureRandom.uuid
+      end
+      create_tenant_row(source_tenant, target_host, new_tenant_id)
+
+      # Step 8: Copy S3 files from clone bucket to tenant bucket
+      copy_s3_files_from_clone_bucket(clone_id, new_tenant_id, uuid_mapping)
+
+      puts "✓ Restore completed"
+    ensure
+      # Clean up temporary files
+      FileUtils.rm_f(original_dump)
+      FileUtils.rm_f(working_dump)
     end
-    create_tenant_row(source_tenant, target_host, new_tenant_id)
-
-    puts "✓ Restore completed"
   end
 
   private
 
-  def load_source_tenant(dump_dir)
-    tenant_file = File.join(dump_dir, 'tenant.json')
-    JSON.parse(File.read(tenant_file))
+  def download_dump_from_s3(clone_id, local_path)
+    puts "Downloading SQL dump from S3..."
+    uploader = S3Uploader.new(
+      bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      region: ENV['AWS_REGION']
+    )
+    s3_key = "#{clone_id}/dump.sql"
+    uploader.download_file(s3_key: s3_key, local_path: local_path)
+    puts "✓ SQL dump downloaded (#{File.size(local_path)} bytes)"
+  end
+
+  def download_tenant_json_from_s3(clone_id)
+    puts "Downloading tenant metadata from S3..."
+    uploader = S3Uploader.new(
+      bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      region: ENV['AWS_REGION']
+    )
+    s3_key = "#{clone_id}/tenant.json"
+
+    # Download JSON directly into memory
+    require 'stringio'
+    s3_client = Aws::S3::Client.new(
+      region: ENV['AWS_REGION'],
+      access_key_id: ENV['AWS_ACCESS_KEY_ID'],
+      secret_access_key: ENV['AWS_SECRET_ACCESS_KEY']
+    )
+    response = s3_client.get_object(bucket: ENV['AWS_S3_CLONE_BUCKET'], key: s3_key)
+    tenant_json = response.body.read
+
+    puts "✓ Tenant metadata downloaded"
+    JSON.parse(tenant_json)
+  end
+
+  def copy_s3_files_from_clone_bucket(clone_id, target_tenant_id, uuid_mapping)
+    puts "Copying S3 files with UUID mapping..."
+    $stdout.flush
+    copier = S3FilesCopier.new(
+      source_bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      dest_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
+      region: ENV['AWS_REGION']
+    )
+    count = copier.copy_from_clone_bucket(
+      clone_id: clone_id,
+      target_tenant_id: target_tenant_id,
+      uuid_mapping: uuid_mapping
+    )
+    puts "✓ Copied #{count} files from S3 with UUID mapping"
+    $stdout.flush
   end
 
   def copy_dump(source, destination)
@@ -70,7 +129,7 @@ class TenantRestorer
     puts "✓ Schema replaced"
   end
 
-  def generate_uuid_mapping(dump_file, dump_dir)
+  def generate_uuid_mapping(dump_file)
     puts "Extracting primary key UUIDs..."
     uuids = extract_primary_key_uuids(dump_file)
     puts "Found #{uuids.size} unique UUIDs"
