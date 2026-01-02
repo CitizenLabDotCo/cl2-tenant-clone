@@ -1,4 +1,5 @@
 require 'aws-sdk-s3'
+require 'fileutils'
 
 class S3Uploader
   def initialize(bucket:, region:)

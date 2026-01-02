@@ -1,8 +1,7 @@
 require 'aws-sdk-s3'
+require_relative 'tenant_helpers'
 
 class S3FilesCopier
-  UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
-
   def initialize(source_bucket:, dest_bucket:, region:)
     @source_bucket = source_bucket
     @dest_bucket = dest_bucket
@@ -125,7 +124,7 @@ class S3FilesCopier
   end
 
   def transform_key_with_uuids(key, uuid_mapping)
-    key.gsub(UUID_REGEX) do |uuid|
+    key.gsub(TenantHelpers::UUID_REGEX) do |uuid|
       uuid_mapping[uuid.downcase] || uuid
     end
   end

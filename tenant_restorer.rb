@@ -8,9 +8,6 @@ require_relative 's3_uploader'
 require_relative 's3_files_copier'
 
 class TenantRestorer
-  UUID_REGEX = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i
-  DUMPS_DIR = './tmp/dumps'
-
   def restore(clone_id, target_host)
     original_dump = "/tmp/dump-#{clone_id}.sql"
     working_dump = "/tmp/dump-#{clone_id}-transformed.sql"
@@ -165,7 +162,7 @@ class TenantRestorer
       if in_copy_block && id_column_index
         values = line.split("\t")
         id_value = values[id_column_index]&.strip
-        if id_value && id_value =~ UUID_REGEX
+        if id_value && id_value =~ TenantHelpers::UUID_REGEX
           uuids.add(id_value.downcase)
         end
       end

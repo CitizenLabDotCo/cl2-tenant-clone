@@ -6,12 +6,6 @@ require_relative 's3_uploader'
 require_relative 's3_files_copier'
 
 class TenantDumper
-  DUMPS_DIR = './tmp/dumps'
-
-  def initialize
-    FileUtils.mkdir_p(DUMPS_DIR)
-  end
-
   def dump(source_host)
     clone_id = SecureRandom.uuid
     schema_name = TenantHelpers.host_to_schema(source_host)
