@@ -117,7 +117,7 @@ class S3FilesCopier
       objects.concat(response.contents)
       continuation_token = response.next_continuation_token
 
-      break unless response.is_truncated
+      break if !response.is_truncated
     end
 
     objects

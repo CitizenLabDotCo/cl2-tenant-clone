@@ -68,16 +68,11 @@ class TenantDumper
     # Upload directly to S3 (no local file)
     puts "Uploading tenant metadata to S3..."
 
-    s3_client = Aws::S3::Client.new(
-      region: ENV['AWS_REGION'],
-      access_key_id: ENV['AWS_ACCESS_KEY_ID'],
-      secret_access_key: ENV['AWS_SECRET_ACCESS_KEY']
-    )
-    s3_client.put_object(
+    uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
-      key: "#{clone_id}/tenant.json",
-      body: tenant_json
+      region: ENV['AWS_REGION']
     )
+    uploader.upload_string(content: tenant_json, s3_key: "#{clone_id}/tenant.json")
 
     puts "✓ Tenant metadata uploaded to S3"
 

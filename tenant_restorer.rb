@@ -79,14 +79,7 @@ class TenantRestorer
     s3_key = "#{clone_id}/tenant.json"
 
     # Download JSON directly into memory
-    require 'stringio'
-    s3_client = Aws::S3::Client.new(
-      region: ENV['AWS_REGION'],
-      access_key_id: ENV['AWS_ACCESS_KEY_ID'],
-      secret_access_key: ENV['AWS_SECRET_ACCESS_KEY']
-    )
-    response = s3_client.get_object(bucket: ENV['AWS_S3_CLONE_BUCKET'], key: s3_key)
-    tenant_json = response.body.read
+    tenant_json = uploader.download_string(s3_key: s3_key)
 
     puts "✓ Tenant metadata downloaded"
     JSON.parse(tenant_json)
@@ -176,8 +169,8 @@ class TenantRestorer
 
     # Note: Loads entire file into memory - may not be efficient for very large dumps
     content = File.read(dump_file)
-    uuid_mapping.each do |old_uuid, new_uuid|
-      content = content.gsub(/\b#{old_uuid}\b/i, new_uuid)
+    content = content.gsub(TenantHelpers::UUID_REGEX) do |uuid|
+      uuid_mapping[uuid.downcase] || uuid
     end
     File.write(dump_file, content)
 
@@ -219,9 +212,9 @@ class TenantRestorer
 
     sql = "INSERT INTO public.tenants (#{columns}) VALUES (#{values});"
 
-    result = `psql -c "#{sql}"`
+    success = system('psql', '-c', sql)
 
-    if $?.exitstatus != 0
+    if !success
       raise "Failed to create tenant row"
     end
 

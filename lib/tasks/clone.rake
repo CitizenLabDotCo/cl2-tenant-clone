@@ -10,9 +10,9 @@ namespace :clone do
     end
 
     dumper = TenantDumper.new
-    dump_dir = dumper.dump(args[:source_host])
+    clone_id = dumper.dump(args[:source_host])
 
-    puts "✓ Dump completed: #{dump_dir}"
+    puts "✓ Dump completed: #{clone_id}"
   end
 
   desc "Restore a tenant from dump"

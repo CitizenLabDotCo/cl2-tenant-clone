@@ -32,6 +32,19 @@ class S3Uploader
     end
   end
 
+  def upload_string(content:, s3_key:)
+    @s3_client.put_object(
+      bucket: @bucket,
+      key: s3_key,
+      body: content
+    )
+  end
+
+  def download_string(s3_key:)
+    response = @s3_client.get_object(bucket: @bucket, key: s3_key)
+    response.body.read
+  end
+
   def object_exists?(s3_key)
     @s3_client.head_object(bucket: @bucket, key: s3_key)
     true
