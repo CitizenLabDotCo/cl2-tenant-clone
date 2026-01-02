@@ -44,11 +44,4 @@ class S3Uploader
     response = @s3_client.get_object(bucket: @bucket, key: s3_key)
     response.body.read
   end
-
-  def object_exists?(s3_key)
-    @s3_client.head_object(bucket: @bucket, key: s3_key)
-    true
-  rescue Aws::S3::Errors::NotFound
-    false
-  end
 end

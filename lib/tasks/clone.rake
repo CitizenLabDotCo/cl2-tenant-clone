@@ -2,7 +2,7 @@ require_relative '../../tenant_dumper'
 require_relative '../../tenant_restorer'
 
 namespace :clone do
-  desc "Dump a tenant schema to local file"
+  desc "Dump a tenant schema to S3"
   task :dump, [:source_host] do |t, args|
     if !args[:source_host]
       puts "Usage: rake clone:dump['source.localhost']"

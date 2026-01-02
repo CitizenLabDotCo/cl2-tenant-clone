@@ -47,7 +47,7 @@ class S3FilesCopier
 
         # Progress indicator every 50 files
         puts "  Copied #{count} files..." if count % 50 == 0
-      rescue Aws::S3::Errors::NoSuchKey => e
+      rescue Aws::S3::Errors::NoSuchKey
         # File was deleted between listing and copying, skip it
         puts "  Skipped missing file: #{source_key}"
       end
@@ -92,7 +92,7 @@ class S3FilesCopier
 
         # Progress indicator every 50 files
         puts "  Copied #{count} files..." if count % 50 == 0
-      rescue Aws::S3::Errors::NoSuchKey => e
+      rescue Aws::S3::Errors::NoSuchKey
         # File was deleted between listing and copying, skip it
         puts "  Skipped missing file: #{source_key}"
       end
