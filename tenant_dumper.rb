@@ -6,8 +6,8 @@ require_relative 's3_uploader'
 require_relative 's3_files_copier'
 
 class TenantDumper
-  def dump(source_host)
-    clone_id = SecureRandom.uuid
+  def dump(source_host, clone_id: nil)
+    clone_id ||= SecureRandom.uuid
     schema_name = DatabaseHelpers.host_to_schema(source_host)
 
     puts "Clone ID: #{clone_id}"

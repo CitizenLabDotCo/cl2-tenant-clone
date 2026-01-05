@@ -3,12 +3,30 @@ version: '3'
 services:
   cl2-tenant-clone:
     build: .
-    tty: true
-    stdin_open: true
+    command: ruby server.rb
     volumes:
       - .:/cl2-tenant-clone
     env_file:
       - .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      localstack:
+        condition: service_started
+
+  rabbitmq:
+    image: rabbitmq:3.8-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   localstack:
     image: localstack/localstack:latest
