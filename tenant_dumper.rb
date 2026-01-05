@@ -1,14 +1,14 @@
 require 'fileutils'
 require 'securerandom'
 require 'json'
-require_relative 'tenant_helpers'
+require_relative 'database_helpers'
 require_relative 's3_uploader'
 require_relative 's3_files_copier'
 
 class TenantDumper
   def dump(source_host)
     clone_id = SecureRandom.uuid
-    schema_name = TenantHelpers.host_to_schema(source_host)
+    schema_name = DatabaseHelpers.host_to_schema(source_host)
 
     puts "Clone ID: #{clone_id}"
 
@@ -104,7 +104,7 @@ class TenantDumper
   end
 
   def fetch_tenant_row(host)
-    sql = "SELECT row_to_json(t) FROM (SELECT * FROM public.tenants WHERE host = '#{escape_sql(host)}') t;"
+    sql = "SELECT row_to_json(t) FROM (SELECT * FROM public.tenants WHERE host = '#{DatabaseHelpers.escape_sql(host)}') t;"
     result = `psql -t -A -c "#{sql}"`.strip
 
     if result.empty?
@@ -112,9 +112,5 @@ class TenantDumper
     end
 
     JSON.parse(result)
-  end
-
-  def escape_sql(value)
-    value.gsub("'", "''")
   end
 end

@@ -3,7 +3,7 @@ require 'securerandom'
 require 'json'
 require 'set'
 require 'time'
-require_relative 'tenant_helpers'
+require_relative 'database_helpers'
 require_relative 's3_uploader'
 require_relative 's3_files_copier'
 
@@ -21,8 +21,8 @@ class TenantRestorer
       # Step 2: Download tenant.json from S3
       source_tenant = download_tenant_json_from_s3(clone_id)
 
-      source_schema = TenantHelpers.host_to_schema(source_tenant['host'])
-      target_schema = TenantHelpers.host_to_schema(target_host)
+      source_schema = DatabaseHelpers.host_to_schema(source_tenant['host'])
+      target_schema = DatabaseHelpers.host_to_schema(target_host)
       puts "Schema: #{source_schema} → #{target_schema}"
 
       # Step 3: Copy original dump to working file
@@ -158,7 +158,7 @@ class TenantRestorer
       if in_copy_block && id_column_index
         values = line.split("\t")
         id_value = values[id_column_index]&.strip
-        if id_value && id_value =~ TenantHelpers::UUID_REGEX
+        if id_value && id_value =~ DatabaseHelpers::UUID_REGEX
           uuids.add(id_value.downcase)
         end
       end
@@ -172,7 +172,7 @@ class TenantRestorer
 
     # Note: Loads entire file into memory - may not be efficient for very large dumps
     content = File.read(dump_file)
-    content = content.gsub(TenantHelpers::UUID_REGEX) do |uuid|
+    content = content.gsub(DatabaseHelpers::UUID_REGEX) do |uuid|
       uuid_mapping[uuid.downcase] || uuid
     end
     File.write(dump_file, content)
@@ -211,7 +211,7 @@ class TenantRestorer
 
     # Build INSERT dynamically from all keys
     columns = new_tenant.keys.join(', ')
-    values = new_tenant.values.map { |v| quote_value(v) }.join(', ')
+    values = new_tenant.values.map { |v| DatabaseHelpers.quote_value(v) }.join(', ')
 
     sql = "INSERT INTO public.tenants (#{columns}) VALUES (#{values});"
 
@@ -222,23 +222,6 @@ class TenantRestorer
     end
 
     puts "✓ Tenant row created: #{new_tenant['name']} (#{target_host})"
-  end
-
-  def quote_value(value)
-    case value
-    when nil
-      'NULL'
-    when Hash, Array
-      "'#{escape_sql(value.to_json)}'"
-    when String
-      "'#{escape_sql(value)}'"
-    else
-      "'#{escape_sql(value.to_s)}'"
-    end
-  end
-
-  def escape_sql(value)
-    value.to_s.gsub("'", "''")
   end
 
   def delete_clone_folder(clone_id)
