@@ -11,28 +11,30 @@ module S3TestHelpers
     )
   end
 
-  def self.create_test_bucket
+  def self.create_test_buckets
     client = test_s3_client
-    client.create_bucket(bucket: ENV['AWS_S3_CLONE_BUCKET'])
-  rescue Aws::S3::Errors::BucketAlreadyOwnedByYou
-    # Bucket already exists, ignore
+    [ENV['AWS_S3_CLONE_BUCKET'], ENV['AWS_S3_CLUSTER_BUCKET']].each do |bucket|
+      client.create_bucket(bucket: bucket)
+    rescue Aws::S3::Errors::BucketAlreadyOwnedByYou
+      # Bucket already exists, ignore
+    end
   end
 
-  def self.clear_test_bucket
+  def self.clear_test_buckets
     client = test_s3_client
-    bucket = ENV['AWS_S3_CLONE_BUCKET']
+    [ENV['AWS_S3_CLONE_BUCKET'], ENV['AWS_S3_CLUSTER_BUCKET']].each do |bucket|
+      # List all objects
+      response = client.list_objects_v2(bucket: bucket)
+      next if response.contents.empty?
 
-    # List all objects
-    response = client.list_objects_v2(bucket: bucket)
-    return if response.contents.empty?
-
-    # Delete all objects
-    objects_to_delete = response.contents.map { |obj| { key: obj.key } }
-    client.delete_objects(
-      bucket: bucket,
-      delete: { objects: objects_to_delete }
-    )
-  rescue Aws::S3::Errors::NoSuchBucket
-    # Bucket doesn't exist, ignore
+      # Delete all objects
+      objects_to_delete = response.contents.map { |obj| { key: obj.key } }
+      client.delete_objects(
+        bucket: bucket,
+        delete: { objects: objects_to_delete }
+      )
+    rescue Aws::S3::Errors::NoSuchBucket
+      # Bucket doesn't exist, ignore
+    end
   end
 end
