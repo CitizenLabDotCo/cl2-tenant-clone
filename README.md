@@ -37,10 +37,21 @@ Future: Start clone from Admin HQ after running `docker compose up`.
 
 ## Testing
 
-```bash
-# Run all tests
-docker compose run --rm cl2-tenant-clone bundle exec rspec
+The test suite includes unit tests and integration tests that verify the full dump/restore cycle.
 
-# Tests use LocalStack for S3 mocking
-docker compose up -d localstack
+```bash
+# Run all tests (includes integration tests with PostgreSQL + LocalStack)
+docker compose --profile test run --rm test bundle exec rspec
+
+# Run only unit tests (S3 operations)
+docker compose run --rm cl2-tenant-clone bundle exec rspec spec/s3_uploader_spec.rb spec/s3_files_copier_spec.rb
+
+# Run only integration test
+docker compose --profile test run --rm test bundle exec rspec spec/integration/
 ```
+
+**Test infrastructure:**
+- Unit tests use LocalStack for S3 mocking
+- Integration tests use a temporary PostgreSQL database (`postgres-test` container)
+- The test database is automatically created/destroyed with the test profile
+- No dependency on the main application or its database

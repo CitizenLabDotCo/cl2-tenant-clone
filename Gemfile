@@ -8,4 +8,5 @@ gem 'rexml'
 
 group :test do
   gem 'rspec', '~> 3.13'
+  gem 'pg', '~> 1.5'
 end
