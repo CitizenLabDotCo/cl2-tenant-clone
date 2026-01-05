@@ -52,4 +52,32 @@ class S3Uploader
     response = @s3_client.get_object(bucket: @bucket, key: s3_key)
     response.body.read
   end
+
+  def delete_prefix(prefix:)
+    count = 0
+    continuation_token = nil
+
+    loop do
+      response = @s3_client.list_objects_v2(
+        bucket: @bucket,
+        prefix: prefix,
+        continuation_token: continuation_token
+      )
+
+      if !response.contents.empty?
+        # Delete objects in batch (up to 1000 at a time)
+        objects_to_delete = response.contents.map { |obj| { key: obj.key } }
+        @s3_client.delete_objects(
+          bucket: @bucket,
+          delete: { objects: objects_to_delete }
+        )
+        count += objects_to_delete.size
+      end
+
+      continuation_token = response.next_continuation_token
+      break if !response.is_truncated
+    end
+
+    count
+  end
 end

@@ -49,6 +49,9 @@ class TenantRestorer
       # Step 8: Copy S3 files from clone bucket to tenant bucket
       copy_s3_files_from_clone_bucket(clone_id, new_tenant_id, uuid_mapping)
 
+      # Step 9: Clean up clone folder from S3
+      delete_clone_folder(clone_id)
+
       puts "✓ Restore completed"
     ensure
       # Clean up temporary files
@@ -236,5 +239,17 @@ class TenantRestorer
 
   def escape_sql(value)
     value.to_s.gsub("'", "''")
+  end
+
+  def delete_clone_folder(clone_id)
+    puts "Cleaning up clone folder..."
+    uploader = S3Uploader.new(
+      bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      region: ENV['AWS_REGION']
+    )
+    count = uploader.delete_prefix(prefix: "#{clone_id}/")
+    puts "✓ Deleted #{count} objects from clone bucket"
+  rescue => e
+    puts "⚠ Warning: Could not delete clone folder: #{e.message}"
   end
 end
