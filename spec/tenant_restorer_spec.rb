@@ -86,4 +86,59 @@ RSpec.describe TenantRestorer do
       end
     end
   end
+
+  describe '#replace_uuids_in_file' do
+    it 'replaces UUIDs according to mapping with case-insensitive matching' do
+      old_user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+      new_user_id = 'f9e8d7c6-b5a4-3210-fedc-ba9876543210'
+      old_idea_id = 'b2c3d4e5-f678-90ab-cdef-123456789012'
+      new_idea_id = 'e8d7c6b5-a432-10fe-dcba-987654321098'
+      unmapped_id = 'c3d4e5f6-7890-abcd-ef12-3456789012ab'
+
+      uuid_mapping = {
+        old_user_id => new_user_id,
+        old_idea_id => new_idea_id
+      }
+
+      dump_content = <<~SQL
+        -- UUIDs in COPY statements
+        COPY public.users (id, tenant_id) FROM stdin;
+        #{old_user_id}\t#{old_idea_id}
+        \\.
+
+        -- UUIDs in INSERT statements
+        INSERT INTO public.ideas (id, author_id) VALUES ('#{old_idea_id}', '#{old_user_id}');
+
+        -- UUID not in mapping (should be preserved)
+        INSERT INTO public.settings (id) VALUES ('#{unmapped_id}');
+
+        -- Mixed case UUIDs (should be matched case-insensitively)
+        INSERT INTO public.logs (user_id) VALUES ('#{old_user_id.upcase}');
+      SQL
+
+      file = Tempfile.new(['test_uuid', '.sql'])
+      begin
+        file.write(dump_content)
+        file.close
+
+        restorer.send(:replace_uuids_in_file, file.path, uuid_mapping)
+
+        result = File.read(file.path)
+
+        # Should replace mapped UUIDs
+        expect(result).to include(new_user_id)
+        expect(result).to include(new_idea_id)
+        expect(result).not_to include(old_user_id)
+        expect(result).not_to include(old_idea_id)
+
+        # Should preserve unmapped UUIDs
+        expect(result).to include(unmapped_id)
+
+        # Should handle case-insensitive matching (3 occurrences of old_user_id in different cases)
+        expect(result.scan(new_user_id).size).to eq(3)
+      ensure
+        file.unlink
+      end
+    end
+  end
 end
