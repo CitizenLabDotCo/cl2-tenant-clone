@@ -67,4 +67,23 @@ class DatabaseHelpers
 
     uuids
   end
+
+  # Check if a host exists in the public.tenants table
+  # Returns true even if tenant is soft-deleted (deleted_at is set)
+  def self.host_exists?(host)
+    with_connection do |conn|
+      sql = "SELECT EXISTS(SELECT 1 FROM public.tenants WHERE host = $1);"
+      result = conn.exec_params(sql, [host])
+      result[0]['exists'] == 't'
+    end
+  end
+
+  # Check if a schema exists in the database
+  def self.schema_exists?(schema_name)
+    with_connection do |conn|
+      sql = "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = $1);"
+      result = conn.exec_params(sql, [schema_name])
+      result[0]['exists'] == 't'
+    end
+  end
 end

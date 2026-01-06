@@ -8,6 +8,9 @@ require_relative 's3_files_copier'
 
 class TenantRestorer
   def restore(clone_id, target_host)
+    # Validate target host before starting restore
+    validate_target_host!(target_host)
+
     original_dump = "/tmp/dump-#{clone_id}.sql"
     working_dump = "/tmp/dump-#{clone_id}-transformed.sql"
 
@@ -211,5 +214,23 @@ class TenantRestorer
     puts "✓ Deleted #{count} objects from clone bucket"
   rescue => e
     puts "⚠ Warning: Could not delete clone folder: #{e.message}"
+  end
+
+  def validate_target_host!(host)
+    # Check host format - only allow .govocal.com domains
+    if !host.end_with?('.govocal.com')
+      raise ArgumentError, "Invalid host format: '#{host}'. Only hosts ending with '.govocal.com' are allowed."
+    end
+
+    # Check if host already exists in tenants table (including soft-deleted)
+    if DatabaseHelpers.host_exists?(host)
+      raise ArgumentError, "Target host '#{host}' already exists in public.tenants table. Cannot overwrite existing tenant."
+    end
+
+    # Check if corresponding schema already exists
+    schema_name = DatabaseHelpers.host_to_schema(host)
+    if DatabaseHelpers.schema_exists?(schema_name)
+      raise ArgumentError, "Target schema '#{schema_name}' already exists. Cannot overwrite existing schema."
+    end
   end
 end

@@ -1,4 +1,5 @@
 require_relative 'support/s3_helpers'
+require_relative 'support/database_helpers'
 
 RSpec.configure do |config|
   config.order = :random
@@ -22,5 +23,11 @@ RSpec.configure do |config|
   # Clear buckets before each S3 test
   config.before(:each, :s3 => true) do
     S3TestHelpers.clear_test_buckets
+  end
+
+  # Database test setup
+  config.before(:each, :database => true) do
+    DatabaseTestHelpers.setup_test_database
+    DatabaseTestHelpers.clear_test_database
   end
 end
