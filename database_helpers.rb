@@ -8,11 +8,6 @@ class DatabaseHelpers
     host.gsub('.', '_')
   end
 
-  def self.escape_sql(value)
-    # Escape single quotes for SQL string literals
-    value.to_s.gsub("'", "''")
-  end
-
   # Create a PostgreSQL connection using environment variables
   def self.create_connection
     PG.connect(
