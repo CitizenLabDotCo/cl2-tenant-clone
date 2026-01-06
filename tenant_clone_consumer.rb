@@ -1,4 +1,5 @@
 require 'json'
+require_relative 'lib/error_reporter'
 require_relative 'tenant_dumper'
 require_relative 'tenant_restorer'
 
@@ -116,6 +117,16 @@ class TenantCloneConsumer
       puts "✗ #{operation_type.capitalize} failed: #{e.message}"
       puts e.backtrace.join("\n")
       puts ""
+
+      # Report to Sentry with context
+      ErrorReporter.report(e, extra: {
+        operation: operation_type,
+        clone_id: message['clone_id'],
+        source_cluster: message['source_cluster'],
+        target_cluster: message['target_cluster'],
+        source_host: message['source_host'],
+        target_host: message['target_host']
+      })
 
       # Publish operation_failed event
       publish_event("tenant_clone.#{operation_type}_failed",
