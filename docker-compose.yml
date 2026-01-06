@@ -9,24 +9,8 @@ services:
     env_file:
       - .env
     depends_on:
-      rabbitmq:
-        condition: service_healthy
       localstack:
         condition: service_started
-
-  rabbitmq:
-    image: rabbitmq:3.8-management-alpine
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
 
   localstack:
     image: localstack/localstack:latest
@@ -56,16 +40,8 @@ services:
         condition: service_healthy
       localstack:
         condition: service_started
-    environment:
-      PGHOST: postgres-test
-      PGUSER: postgres
-      PGPASSWORD: postgres
-      PGDATABASE: postgres
-      AWS_ENDPOINT_URL: http://localstack:4566
-      AWS_S3_CLONE_BUCKET: test-clone-bucket
-      AWS_S3_CLUSTER_BUCKET: test-cluster-bucket
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
+    env_file:
+      - .env-test
     volumes:
       - .:/cl2-tenant-clone
 
