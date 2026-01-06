@@ -183,7 +183,9 @@ class TenantRestorer
   def restore_dump_to_database(dump_file)
     puts "Restoring dump to database..."
 
-    success = system('psql', '-f', dump_file)
+    # Use -q (quiet) to suppress NOTICE messages
+    # Redirect stderr to /dev/null to suppress verbose DROP CASCADE and other messages
+    success = system('psql', '-q', '-f', dump_file, err: File::NULL)
 
     if !success
       raise "psql failed with exit code #{$?.exitstatus}"
@@ -209,16 +211,13 @@ class TenantRestorer
     # to cl2-tenant-setup service in the future.
     new_tenant['creation_finalized_at'] = now
 
-    # Build INSERT dynamically from all keys
-    columns = new_tenant.keys.join(', ')
-    values = new_tenant.values.map { |v| DatabaseHelpers.quote_value(v) }.join(', ')
+    DatabaseHelpers.with_connection do |conn|
+      # Build parameterized INSERT dynamically
+      columns = new_tenant.keys
+      placeholders = (1..columns.size).map { |i| "$#{i}" }.join(', ')
+      sql = "INSERT INTO public.tenants (#{columns.join(', ')}) VALUES (#{placeholders});"
 
-    sql = "INSERT INTO public.tenants (#{columns}) VALUES (#{values});"
-
-    success = system('psql', '-c', sql)
-
-    if !success
-      raise "Failed to create tenant row"
+      conn.exec_params(sql, new_tenant.values)
     end
 
     puts "✓ Tenant row created: #{new_tenant['name']} (#{target_host})"

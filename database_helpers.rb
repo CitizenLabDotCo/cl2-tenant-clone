@@ -1,3 +1,5 @@
+require 'pg'
+
 class DatabaseHelpers
   UUID_REGEX = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i
 
@@ -11,17 +13,24 @@ class DatabaseHelpers
     value.to_s.gsub("'", "''")
   end
 
-  def self.quote_value(value)
-    # Quote and escape values for SQL INSERT statements
-    case value
-    when nil
-      'NULL'
-    when Hash, Array
-      "'#{escape_sql(value.to_json)}'"
-    when String
-      "'#{escape_sql(value)}'"
-    else
-      "'#{escape_sql(value.to_s)}'"
+  # Create a PostgreSQL connection using environment variables
+  def self.create_connection
+    PG.connect(
+      host: ENV.fetch('PGHOST', 'localhost'),
+      port: ENV.fetch('PGPORT', '5432').to_i,
+      dbname: ENV.fetch('PGDATABASE'),
+      user: ENV.fetch('PGUSER'),
+      password: ENV.fetch('PGPASSWORD', nil)
+    )
+  end
+
+  # Execute a query with a block, automatically managing connection
+  def self.with_connection
+    conn = create_connection
+    begin
+      yield conn
+    ensure
+      conn.close
     end
   end
 end

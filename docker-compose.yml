@@ -60,6 +60,7 @@ services:
       PGHOST: postgres-test
       PGUSER: postgres
       PGPASSWORD: postgres
+      PGDATABASE: postgres
       AWS_ENDPOINT_URL: http://localstack:4566
       AWS_S3_CLONE_BUCKET: test-clone-bucket
       AWS_S3_CLUSTER_BUCKET: test-cluster-bucket

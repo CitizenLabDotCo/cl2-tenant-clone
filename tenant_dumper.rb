@@ -104,13 +104,15 @@ class TenantDumper
   end
 
   def fetch_tenant_row(host)
-    sql = "SELECT row_to_json(t) FROM (SELECT * FROM public.tenants WHERE host = '#{DatabaseHelpers.escape_sql(host)}') t;"
-    result = `psql -t -A -c "#{sql}"`.strip
+    DatabaseHelpers.with_connection do |conn|
+      sql = "SELECT row_to_json(t) FROM (SELECT * FROM public.tenants WHERE host = $1) t;"
+      result = conn.exec_params(sql, [host])
 
-    if result.empty?
-      raise "No tenant found for host: #{host}"
+      if result.ntuples == 0
+        raise "No tenant found for host: #{host}"
+      end
+
+      JSON.parse(result[0]['row_to_json'])
     end
-
-    JSON.parse(result)
   end
 end

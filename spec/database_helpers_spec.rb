@@ -25,35 +25,4 @@ RSpec.describe DatabaseHelpers do
       expect(DatabaseHelpers.escape_sql(true)).to eq("true")
     end
   end
-
-  describe '.quote_value' do
-    it 'returns NULL for nil values' do
-      expect(DatabaseHelpers.quote_value(nil)).to eq('NULL')
-    end
-
-    it 'quotes and escapes string values' do
-      expect(DatabaseHelpers.quote_value('hello')).to eq("'hello'")
-      expect(DatabaseHelpers.quote_value("O'Reilly")).to eq("'O''Reilly'")
-    end
-
-    it 'converts hashes to JSON and quotes them' do
-      result = DatabaseHelpers.quote_value({ foo: 'bar' })
-      expect(result).to eq("'{\"foo\":\"bar\"}'")
-    end
-
-    it 'converts arrays to JSON and quotes them' do
-      result = DatabaseHelpers.quote_value(['a', 'b'])
-      expect(result).to eq("'[\"a\",\"b\"]'")
-    end
-
-    it 'escapes single quotes in JSON values' do
-      result = DatabaseHelpers.quote_value({ name: "O'Reilly" })
-      expect(result).to eq("'{\"name\":\"O''Reilly\"}'")
-    end
-
-    it 'converts other types to strings and quotes them' do
-      expect(DatabaseHelpers.quote_value(123)).to eq("'123'")
-      expect(DatabaseHelpers.quote_value(true)).to eq("'true'")
-    end
-  end
 end
