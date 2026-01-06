@@ -32,9 +32,8 @@ class TenantDumper
     temp_file = "/tmp/dump-#{clone_id}.sql"
     puts "Dumping schema '#{schema_name}'..."
 
-    # Dump to temporary file
-    cmd = build_dump_command(schema_name, temp_file)
-    success = system(cmd)
+    # Dump to temporary file using array form to prevent shell injection
+    success = system('pg_dump', '--schema', schema_name, '--no-owner', '--no-acl', '--file', temp_file)
 
     if !success
       FileUtils.rm_f(temp_file)
@@ -91,16 +90,6 @@ class TenantDumper
       clone_id: clone_id
     )
     puts "✓ Copied #{count} files to S3"
-  end
-
-  def build_dump_command(schema_name, dump_file)
-    [
-      'pg_dump',
-      '--schema', schema_name,
-      '--no-owner',
-      '--no-acl',
-      '--file', dump_file
-    ].join(' ')
   end
 
   def fetch_tenant_row(host)
