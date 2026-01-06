@@ -1,6 +1,7 @@
 require 'bunny'
 require 'json'
 require_relative 'tenant_dumper'
+require_relative 'tenant_restorer'
 
 # Disable output buffering for Docker logs
 $stdout.sync = true
@@ -93,6 +94,72 @@ queue_dump.subscribe(block: false, manual_ack: false) do |delivery_info, propert
     publish_event(conn, 'tenant_clone.dump_failed',
       message.merge(
         'event' => 'dump_failed',
+        'timestamp' => Time.now.iso8601,
+        'payload' => {
+          'error_message' => e.message
+        }
+      ))
+  end
+end
+
+# ============================================================================
+# RESTORE REQUEST HANDLER
+# ============================================================================
+queue_name = "cl2back.tenant_clone.restore.#{CLUSTER_NAME}"
+queue_restore = ch.queue(queue_name, durable: true).bind(x, routing_key: 'tenant_clone.restore_requested')
+
+puts "Listening for restore requests on queue: #{queue_name}"
+puts "  Routing key: tenant_clone.restore_requested"
+puts ""
+
+queue_restore.subscribe(block: false, manual_ack: false) do |delivery_info, properties, payload_json|
+  message = JSON.parse(payload_json)
+
+  # Only process if we are the TARGET cluster
+  if message['target_cluster'] != CLUSTER_NAME
+    puts "[SKIP] Restore request not for this cluster (target: #{message['target_cluster']}, me: #{CLUSTER_NAME})"
+    next
+  end
+
+  clone_id = message['clone_id']
+  target_host = message['target_host']
+
+  puts "[RESTORE] Processing request:"
+  puts "  Clone ID: #{clone_id}"
+  puts "  Source cluster: #{message['source_cluster']}"
+  puts "  Source host: #{message['source_host']}"
+  puts "  Target host: #{target_host}"
+
+  begin
+    # Publish restore_started
+    publish_event(conn, 'tenant_clone.restore_started',
+      message.merge(
+        'event' => 'restore_started',
+        'timestamp' => Time.now.iso8601
+      ))
+
+    # Execute restore
+    restorer = TenantRestorer.new
+    restorer.restore(clone_id, target_host)
+
+    # Publish restore_completed
+    publish_event(conn, 'tenant_clone.restore_completed',
+      message.merge(
+        'event' => 'restore_completed',
+        'timestamp' => Time.now.iso8601
+      ))
+
+    puts "✓ Restore completed successfully"
+    puts ""
+  rescue StandardError => e
+    puts "✗ Restore failed: #{e.message}"
+    puts e.backtrace.join("\n")
+    puts ""
+
+    # Publish restore_failed
+    publish_event(conn, 'tenant_clone.restore_failed',
+      message.merge(
+        'event' => 'restore_failed',
         'timestamp' => Time.now.iso8601,
         'payload' => {
           'error_message' => e.message

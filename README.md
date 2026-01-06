@@ -59,6 +59,22 @@ curl -u guest:guest -X POST http://localhost:8088/api/exchanges/%2F/cl2back/publ
   }'
 ```
 
+Send a test restore request:
+
+```bash
+curl -u guest:guest -X POST http://localhost:8088/api/exchanges/%2F/cl2back/publish \
+  -H "Content-Type: application/json" \
+  -d '{
+    "properties": {
+      "content_type": "application/json",
+      "app_id": "admin-hq"
+    },
+    "routing_key": "tenant_clone.restore_requested",
+    "payload": "{\"source_cluster\":\"local\",\"target_cluster\":\"local\",\"clone_id\":\"test-123\",\"source_host\":\"demo.localhost\",\"target_host\":\"demo-clone.localhost\"}",
+    "payload_encoding": "string"
+  }'
+```
+
 ## Testing
 
 The test suite includes unit tests and integration tests that verify the full dump/restore cycle.
