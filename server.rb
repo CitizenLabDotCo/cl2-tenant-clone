@@ -9,9 +9,14 @@ $stderr.sync = true
 CLUSTER_NAME = ENV.fetch('CLUSTER_NAME', 'local')
 RABBITMQ_URI = ENV.fetch('RABBITMQ_URI', 'amqp://guest:guest@rabbitmq:5672')
 
+# Helper to sanitize URIs for logging
+def sanitize_uri(uri)
+  uri.gsub(/:[^:@]*@/, ':*****@')
+end
+
 # Connect to RabbitMQ
 puts "Connecting to RabbitMQ..."
-puts "  URI: #{RABBITMQ_URI}"
+puts "  URI: #{sanitize_uri(RABBITMQ_URI)}"
 puts "  Cluster: #{CLUSTER_NAME}"
 
 conn = Bunny.new(RABBITMQ_URI)
