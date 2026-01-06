@@ -130,13 +130,16 @@ class TenantCloneConsumer
   end
 
   def publish_event(routing_key, event)
-    @conn.create_channel.tap do |channel|
+    channel = @conn.create_channel
+    begin
       channel.topic(TOPIC).publish(
         event.to_json,
         app_id: 'cl2-tenant-clone',
         content_type: 'application/json',
         routing_key: routing_key
       )
-    end.close
+    ensure
+      channel.close
+    end
   end
 end

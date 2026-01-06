@@ -112,11 +112,17 @@ class TenantRestorer
   def replace_schema_in_file(dump_file, source_schema, target_schema)
     puts "Replacing schema '#{source_schema}' with '#{target_schema}'..."
 
-    # Note: Loads entire file into memory - may not be efficient for very large dumps
-    content = File.read(dump_file)
-    transformed = content.gsub(/\b#{Regexp.escape(source_schema)}\b/, target_schema)
-    File.write(dump_file, transformed)
+    # Process line by line to avoid loading large files into memory
+    temp_file = "#{dump_file}.tmp"
+    regex = /\b#{Regexp.escape(source_schema)}\b/
 
+    File.open(temp_file, 'w') do |output|
+      File.foreach(dump_file) do |line|
+        output.write(line.gsub(regex, target_schema))
+      end
+    end
+
+    FileUtils.mv(temp_file, dump_file)
     puts "✓ Schema replaced"
   end
 
@@ -170,13 +176,19 @@ class TenantRestorer
   def replace_uuids_in_file(dump_file, uuid_mapping)
     puts "Replacing UUIDs in dump..."
 
-    # Note: Loads entire file into memory - may not be efficient for very large dumps
-    content = File.read(dump_file)
-    content = content.gsub(DatabaseHelpers::UUID_REGEX) do |uuid|
-      uuid_mapping[uuid.downcase] || uuid
-    end
-    File.write(dump_file, content)
+    # Process line by line to avoid loading large files into memory
+    temp_file = "#{dump_file}.tmp"
 
+    File.open(temp_file, 'w') do |output|
+      File.foreach(dump_file) do |line|
+        transformed_line = line.gsub(DatabaseHelpers::UUID_REGEX) do |uuid|
+          uuid_mapping[uuid.downcase] || uuid
+        end
+        output.write(transformed_line)
+      end
+    end
+
+    FileUtils.mv(temp_file, dump_file)
     puts "✓ UUIDs replaced"
   end
 
