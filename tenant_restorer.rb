@@ -1,7 +1,6 @@
 require 'fileutils'
 require 'securerandom'
 require 'json'
-require 'set'
 require 'time'
 require_relative 'database_helpers'
 require_relative 's3_uploader'
@@ -128,7 +127,7 @@ class TenantRestorer
 
   def generate_uuid_mapping(dump_file)
     puts "Extracting primary key UUIDs..."
-    uuids = extract_primary_key_uuids(dump_file)
+    uuids = DatabaseHelpers.extract_primary_key_uuids(dump_file)
     puts "Found #{uuids.size} unique UUIDs"
 
     puts "Generating new UUIDs..."
@@ -139,39 +138,6 @@ class TenantRestorer
     mapping
   end
 
-  def extract_primary_key_uuids(dump_file)
-    uuids = Set.new
-    in_copy_block = false
-    id_column_index = nil
-
-    File.foreach(dump_file) do |line|
-      # Detect COPY statement and find 'id' column position
-      if line =~ /^COPY .+\((.*)\) FROM stdin;$/
-        columns = $1.split(',').map(&:strip)
-        id_column_index = columns.index('id')
-        in_copy_block = true
-        next
-      end
-
-      # End of COPY block
-      if line.start_with?('\\.')
-        in_copy_block = false
-        id_column_index = nil
-        next
-      end
-
-      # Extract UUID from 'id' column in COPY data
-      if in_copy_block && id_column_index
-        values = line.split("\t")
-        id_value = values[id_column_index]&.strip
-        if id_value && id_value =~ DatabaseHelpers::UUID_REGEX
-          uuids.add(id_value.downcase)
-        end
-      end
-    end
-
-    uuids.to_a
-  end
 
   def replace_uuids_in_file(dump_file, uuid_mapping)
     puts "Replacing UUIDs in dump..."

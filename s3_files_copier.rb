@@ -12,11 +12,13 @@ class S3FilesCopier
   # Dump: Copy tenant files to clone bucket
   # Source: uploads/{source_tenant_id}/**
   # Dest: {clone_id}/uploads/**
+  # If valid_uuids is provided, skip files containing UUIDs not in the set
   # TODO: For large numbers of files, consider optimizing with:
   #   - AWS CLI: aws s3 cp s3://source/prefix s3://dest/prefix --recursive
   #   - Parallel gem: Parallel.each(objects, in_threads: 10) { ... }
-  def copy_to_clone_bucket(source_tenant_id:, clone_id:)
+  def copy_to_clone_bucket(source_tenant_id:, clone_id:, valid_uuids: nil)
     count = 0
+    skipped = 0
     source_prefix = "uploads/#{source_tenant_id}/"
 
     puts "  Listing objects in tenant bucket..."
@@ -28,6 +30,12 @@ class S3FilesCopier
 
       # Skip directory markers (keys ending with /)
       next if source_key.end_with?('/')
+
+      # Skip files with orphaned UUIDs if filtering is enabled
+      if valid_uuids && contains_orphaned_uuid?(source_key, valid_uuids)
+        skipped += 1
+        next
+      end
 
       # Remove tenant prefix: uploads/abc-123/idea_image/... → idea_image/...
       relative_path = source_key.delete_prefix(source_prefix)
@@ -50,6 +58,7 @@ class S3FilesCopier
       end
     end
 
+    puts "  Skipped #{skipped} orphaned files" if skipped > 0
     count
   end
 
@@ -124,5 +133,19 @@ class S3FilesCopier
     key.gsub(DatabaseHelpers::UUID_REGEX) do |uuid|
       uuid_mapping[uuid.downcase] || uuid
     end
+  end
+
+  # Check if a file path contains any UUIDs not in the valid set
+  # Returns true if file should be skipped (has orphaned UUIDs)
+  # Returns false if file should be copied (no UUIDs or all UUIDs are valid)
+  def contains_orphaned_uuid?(key, valid_uuids)
+    # Extract all UUIDs from the file path
+    uuids_in_path = key.scan(DatabaseHelpers::UUID_REGEX).map(&:downcase)
+
+    # If no UUIDs in path, don't skip (static files like logos, PDFs)
+    return false if uuids_in_path.empty?
+
+    # Skip if ANY UUID in path is not in the valid set
+    uuids_in_path.any? { |uuid| !valid_uuids.include?(uuid) }
   end
 end
