@@ -1,0 +1,127 @@
+version: 2.1
+
+jobs:
+  build-docker-image:
+    docker:
+      - image: cimg/base:2026.01
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: Build Docker image
+          command: |
+            docker build -t citizenlabdotco/cl2-tenant-clone:$CIRCLE_SHA1 .
+      - run:
+          name: Login to DockerHub
+          command: docker login -u $DOCKER_USER -p $DOCKER_PASS
+      - run:
+          name: Push Docker image
+          command: docker push citizenlabdotco/cl2-tenant-clone:$CIRCLE_SHA1
+
+  test:
+    docker:
+      - image: citizenlabdotco/cl2-tenant-clone:$CIRCLE_SHA1
+        auth:
+          username: $DOCKER_USER
+          password: $DOCKER_PASS
+        environment:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+      - image: postgres:16-alpine
+        environment:
+          POSTGRES_PASSWORD: postgres
+      - image: localstack/localstack:latest
+        environment:
+          SERVICES: s3
+    steps:
+      - checkout
+      - run:
+          name: Wait for Postgres
+          command: |
+            until pg_isready -h localhost -U postgres; do
+              echo "Waiting for postgres..."
+              sleep 2
+            done
+      - run:
+          name: Wait for LocalStack
+          command: |
+            until curl -s http://localhost:4566/_localstack/health | grep -q '"s3": "available"'; do
+              echo "Waiting for LocalStack S3..."
+              sleep 2
+            done
+      - run:
+          name: Run tests
+          command: bundle exec rspec
+      - store_test_results:
+          path: /tmp/test-results
+
+  push-deployment-docker-image:
+    docker:
+      - image: cimg/base:2026.01
+    steps:
+      - setup_remote_docker
+      - run:
+          name: Login to DockerHub
+          command: docker login -u $DOCKER_USER -p $DOCKER_PASS
+      - run:
+          name: Pull commit-specific image
+          command: docker pull citizenlabdotco/cl2-tenant-clone:$CIRCLE_SHA1
+      - run:
+          name: Tag with branch name
+          command: docker tag citizenlabdotco/cl2-tenant-clone:$CIRCLE_SHA1 citizenlabdotco/cl2-tenant-clone:$CIRCLE_BRANCH
+      - run:
+          name: Push branch-tagged image
+          command: docker push citizenlabdotco/cl2-tenant-clone:$CIRCLE_BRANCH
+
+  deploy-to-staging:
+    docker:
+      - image: cimg/base:2026.01
+    steps:
+      - run:
+          name: Deploy to staging cluster
+          command: |
+            ssh -o StrictHostKeyChecking=no ubuntu@$DEPLOY_HOST_STAGING << 'EOF'
+              set -e
+              echo "Pulling latest image..."
+              docker pull citizenlabdotco/cl2-tenant-clone:master
+
+              echo "Deploying cl2 stack with updated cl2-tenant-clone service..."
+              cd cl2-deployment
+              docker stack deploy \
+                --compose-file docker-compose-staging.yml \
+                --with-registry-auth \
+                --prune \
+                cl2
+
+              echo "Deployment complete!"
+            EOF
+
+workflows:
+  test_and_deploy:
+    jobs:
+      - build-docker-image:
+          context:
+            - docker-hub-access
+      - test:
+          context:
+            - docker-hub-access
+          requires:
+            - build-docker-image
+      - push-deployment-docker-image:
+          context:
+            - docker-hub-access
+          requires:
+            - test
+          filters:
+            branches:
+              only: master
+      - deploy-to-staging:
+          context:
+            - docker-hub-access
+          requires:
+            - push-deployment-docker-image
+          filters:
+            branches:
+              only: master
