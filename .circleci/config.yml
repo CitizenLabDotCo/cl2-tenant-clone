@@ -27,8 +27,7 @@ jobs:
           password: $DOCKER_PASS
         environment:
           PGHOST: localhost
-          PGUSER: postgres
-          PGPASSWORD: postgres
+          AWS_ENDPOINT_URL: http://localhost:4566
       - image: postgres:16-alpine
         environment:
           POSTGRES_PASSWORD: postgres
