@@ -5,7 +5,7 @@ require 'time'
 require_relative 'database_helpers'
 require_relative 's3_uploader'
 require_relative 's3_files_copier'
-require_relative 'lib/error_reporter'
+require_relative 'error_reporter'
 
 class TenantRestorer
   def restore(clone_id, target_host)

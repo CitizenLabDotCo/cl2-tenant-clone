@@ -1,4 +1,4 @@
-require_relative '../database_helpers'
+require 'database_helpers'
 
 RSpec.describe DatabaseHelpers, :database => true do
   describe '.host_to_schema' do

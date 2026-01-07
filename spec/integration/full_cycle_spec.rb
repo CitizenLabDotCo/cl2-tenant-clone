@@ -1,7 +1,7 @@
 require 'pg'
-require_relative '../../tenant_dumper'
-require_relative '../../tenant_restorer'
-require_relative '../../s3_uploader'
+require 'tenant_dumper'
+require 'tenant_restorer'
+require 's3_uploader'
 
 RSpec.describe 'Full dump and restore cycle' do
   let(:source_host) { 'localhost' }

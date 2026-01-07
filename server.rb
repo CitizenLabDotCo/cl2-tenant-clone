@@ -1,6 +1,6 @@
 require 'bunny'
 require 'sentry-ruby'
-require_relative 'tenant_clone_consumer'
+require_relative 'lib/tenant_clone_consumer'
 
 # Disable output buffering for Docker logs
 $stdout.sync = true

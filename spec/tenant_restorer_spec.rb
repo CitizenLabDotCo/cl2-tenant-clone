@@ -1,4 +1,4 @@
-require_relative '../tenant_restorer'
+require 'tenant_restorer'
 require 'tempfile'
 
 RSpec.describe TenantRestorer do

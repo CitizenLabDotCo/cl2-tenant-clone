@@ -1,4 +1,4 @@
-require_relative '../../database_helpers'
+require 'database_helpers'
 
 module DatabaseTestHelpers
   def self.setup_test_database

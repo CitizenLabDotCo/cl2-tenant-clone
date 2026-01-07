@@ -1,3 +1,6 @@
+# Add lib directory to load path
+$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
+
 require_relative 'support/s3_helpers'
 require_relative 'support/database_helpers'
 

@@ -1,5 +1,5 @@
 require 'json'
-require_relative 'lib/error_reporter'
+require_relative 'error_reporter'
 require_relative 'tenant_dumper'
 require_relative 'tenant_restorer'
 
