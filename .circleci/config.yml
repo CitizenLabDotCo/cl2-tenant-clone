@@ -82,7 +82,7 @@ jobs:
       - run:
           name: Deploy to staging cluster
           command: |
-            ssh -o StrictHostKeyChecking=no ubuntu@$DEPLOY_HOST_STAGING << 'EOF'
+            ssh -o StrictHostKeyChecking=no ubuntu@$DEPLOY_HOST_STAGING \<< 'EOF'
               set -e
               echo "Pulling latest image..."
               docker pull citizenlabdotco/cl2-tenant-clone:master
