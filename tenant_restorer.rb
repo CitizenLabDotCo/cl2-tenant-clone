@@ -5,6 +5,7 @@ require 'time'
 require_relative 'database_helpers'
 require_relative 's3_uploader'
 require_relative 's3_files_copier'
+require_relative 'lib/error_reporter'
 
 class TenantRestorer
   def restore(clone_id, target_host)
@@ -43,7 +44,15 @@ class TenantRestorer
       # Step 7: Create tenant row
       new_tenant_id = uuid_mapping[source_tenant['id']]
       if !new_tenant_id
-        puts "⚠ Warning: Tenant ID not found in UUID mapping, generating new UUID"
+        ErrorReporter.report_msg(
+          "Tenant ID not found in UUID mapping during restore",
+          extra: {
+            source_tenant_id: source_tenant['id'],
+            clone_id: clone_id,
+            target_host: target_host,
+            mapping_size: uuid_mapping.size
+          }
+        )
         new_tenant_id = SecureRandom.uuid
       end
       create_tenant_row(source_tenant, target_host, new_tenant_id)
@@ -213,7 +222,11 @@ class TenantRestorer
     count = uploader.delete_prefix(prefix: "#{clone_id}/")
     puts "✓ Deleted #{count} objects from clone bucket"
   rescue => e
-    puts "⚠ Warning: Could not delete clone folder: #{e.message}"
+    ErrorReporter.report(e, extra: {
+      clone_id: clone_id,
+      bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      operation: 'delete_clone_folder'
+    })
   end
 
   def validate_target_host!(host)
