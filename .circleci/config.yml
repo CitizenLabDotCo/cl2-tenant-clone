@@ -82,22 +82,29 @@ jobs:
           name: Push branch-tagged image
           command: docker push citizenlabdotco/cl2-tenant-clone:$CIRCLE_BRANCH
 
-  deploy-to-staging:
+  deploy-to-swarm:
     docker:
       - image: cimg/base:2026.01
+    parameters:
+      ssh_host:
+        type: env_var_name
+      cluster_name:
+        type: string
+      compose_file:
+        type: string
     steps:
       - run:
-          name: Deploy to staging cluster
+          name: Deploy to << parameters.cluster_name >>
           command: |
-            ssh -o StrictHostKeyChecking=no ubuntu@$DEPLOY_HOST_STAGING \<< 'EOF'
+            ssh -o StrictHostKeyChecking=no ubuntu@${<< parameters.ssh_host >>} \<< 'EOF'
               set -e
               echo "Pulling latest image..."
-              docker pull citizenlabdotco/cl2-tenant-clone:master
+              docker pull citizenlabdotco/cl2-tenant-clone:$CIRCLE_BRANCH
 
               echo "Deploying cl2 stack with updated cl2-tenant-clone service..."
               cd cl2-deployment
               docker stack deploy \
-                --compose-file docker-compose-staging.yml \
+                --compose-file << parameters.compose_file >> \
                 --with-registry-auth \
                 --prune \
                 cl2
@@ -106,7 +113,7 @@ jobs:
             EOF
 
 workflows:
-  test_and_deploy:
+  build_test_and_deploy:
     jobs:
       - build-docker-image:
           context:
@@ -124,7 +131,11 @@ workflows:
           filters:
             branches:
               only: master
-      - deploy-to-staging:
+      - deploy-to-swarm:
+          name: Deploy to staging
+          ssh_host: DEPLOY_HOST_STAGING
+          cluster_name: staging
+          compose_file: docker-compose-staging.yml
           context:
             - docker-hub-access
           requires:
