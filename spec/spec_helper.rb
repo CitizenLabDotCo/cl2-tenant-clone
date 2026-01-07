@@ -11,15 +11,6 @@ RSpec.configure do |config|
 
   # S3 test setup
   config.before(:suite) do
-    # Configure LocalStack for S3 tests
-    ENV['AWS_ENDPOINT_URL'] = 'http://localstack:4566'
-    ENV['AWS_REGION'] = 'us-east-1'
-    ENV['AWS_S3_CLONE_BUCKET'] = 'test-clone-bucket'
-    ENV['AWS_S3_CLUSTER_BUCKET'] = 'test-cluster-bucket'
-    ENV['AWS_ACCESS_KEY_ID'] = 'test'
-    ENV['AWS_SECRET_ACCESS_KEY'] = 'test'
-
-    # Create test buckets
     S3TestHelpers.create_test_buckets
   end
 
