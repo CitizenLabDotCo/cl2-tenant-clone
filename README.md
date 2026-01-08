@@ -31,9 +31,49 @@ Restore a clone:
 docker compose run --rm cl2-tenant-clone rake "clone:restore[clone_id,target.localhost]"
 ```
 
-### RabbitMQ Integration (Not Yet Supported)
+### RabbitMQ Integration
 
-Future: Start clone from Admin HQ after running `docker compose up`.
+Start the service to listen for dump/restore requests:
+
+```bash
+docker compose up
+```
+
+The service connects to the main app's RabbitMQ and listens for messages on the `cl2back` topic exchange.
+
+#### Testing with RabbitMQ
+
+Send a test dump request (using main app's RabbitMQ on port 8088):
+
+```bash
+curl -u guest:guest -X POST http://localhost:8088/api/exchanges/%2F/cl2back/publish \
+  -H "Content-Type: application/json" \
+  -d '{
+    "properties": {
+      "content_type": "application/json",
+      "app_id": "admin-hq"
+    },
+    "routing_key": "tenant_clone.dump_requested",
+    "payload": "{\"source_cluster\":\"local\",\"target_cluster\":\"staging\",\"clone_id\":\"test-123\",\"source_host\":\"demo.localhost\",\"target_host\":\"demo-clone.localhost\"}",
+    "payload_encoding": "string"
+  }'
+```
+
+Send a test restore request:
+
+```bash
+curl -u guest:guest -X POST http://localhost:8088/api/exchanges/%2F/cl2back/publish \
+  -H "Content-Type: application/json" \
+  -d '{
+    "properties": {
+      "content_type": "application/json",
+      "app_id": "admin-hq"
+    },
+    "routing_key": "tenant_clone.restore_requested",
+    "payload": "{\"source_cluster\":\"local\",\"target_cluster\":\"local\",\"clone_id\":\"test-123\",\"source_host\":\"demo.localhost\",\"target_host\":\"demo-clone.localhost\"}",
+    "payload_encoding": "string"
+  }'
+```
 
 ## Testing
 
