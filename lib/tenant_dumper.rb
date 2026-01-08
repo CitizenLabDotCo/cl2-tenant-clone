@@ -12,15 +12,15 @@ class TenantDumper
 
     puts "Clone ID: #{clone_id}"
 
-    # Step 1: Dump SQL to temp file, extract UUIDs, and upload to S3
-    valid_uuids = dump_and_upload_sql(schema_name, clone_id)
+    # Step 1: Dump SQL to temp file and upload to S3
+    dump_and_upload_sql(schema_name, clone_id)
 
     # Step 2: Fetch tenant data and upload to S3 (no local file)
     tenant_data = fetch_and_upload_tenant_data(source_host, clone_id)
 
-    # Step 3: Copy S3 files from tenant bucket to clone bucket with UUID filtering
+    # Step 3: Copy S3 files from tenant bucket to clone bucket
     source_tenant_id = tenant_data['id']
-    copy_s3_files_to_clone_bucket(source_tenant_id, clone_id, valid_uuids)
+    copy_s3_files_to_clone_bucket(source_tenant_id, clone_id)
 
     puts "✓ Dump completed and uploaded to S3"
     clone_id
@@ -42,11 +42,6 @@ class TenantDumper
 
     puts "✓ SQL dump completed (#{File.size(temp_file)} bytes)"
 
-    # Extract UUIDs for S3 file filtering
-    puts "Extracting primary key UUIDs for S3 filtering..."
-    valid_uuids = DatabaseHelpers.extract_primary_key_uuids(temp_file)
-    puts "✓ Found #{valid_uuids.size} unique UUIDs"
-
     # Upload to S3
     puts "Uploading SQL dump to S3..."
     uploader = S3Uploader.new(
@@ -58,8 +53,6 @@ class TenantDumper
 
     # Delete temporary file
     FileUtils.rm_f(temp_file)
-
-    valid_uuids
   end
 
   def fetch_and_upload_tenant_data(host, clone_id)
@@ -85,8 +78,8 @@ class TenantDumper
     tenant_data
   end
 
-  def copy_s3_files_to_clone_bucket(source_tenant_id, clone_id, valid_uuids)
-    puts "Copying S3 files to clone bucket (filtering orphaned files)..."
+  def copy_s3_files_to_clone_bucket(source_tenant_id, clone_id)
+    puts "Copying S3 files to clone bucket..."
     copier = S3FilesCopier.new(
       source_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
       dest_bucket: ENV['AWS_S3_CLONE_BUCKET'],
@@ -94,8 +87,7 @@ class TenantDumper
     )
     count = copier.copy_to_clone_bucket(
       source_tenant_id: source_tenant_id,
-      clone_id: clone_id,
-      valid_uuids: valid_uuids
+      clone_id: clone_id
     )
     puts "✓ Copied #{count} files to S3"
   end
