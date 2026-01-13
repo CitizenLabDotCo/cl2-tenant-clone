@@ -31,8 +31,8 @@ class TenantRestorer
       # Step 3: Copy original dump to working file
       copy_dump(original_dump, working_dump)
 
-      # Step 4: Replace schema names
-      replace_schema_in_file(working_dump, source_schema, target_schema)
+      # Step 4: Replace schema names and host
+      replace_schema_and_host_in_file(working_dump, source_schema, target_schema, source_tenant['host'], target_host)
 
       # Step 5: Generate UUID mappings and replace
       uuid_mapping = generate_uuid_mapping(original_dump)
@@ -109,21 +109,25 @@ class TenantRestorer
     puts "✓ Dump copied to working file"
   end
 
-  def replace_schema_in_file(dump_file, source_schema, target_schema)
-    puts "Replacing schema '#{source_schema}' with '#{target_schema}'..."
+  def replace_schema_and_host_in_file(dump_file, source_schema, target_schema, source_host, target_host)
+    puts "Replacing schema '#{source_schema}' → '#{target_schema}'"
+    puts "Replacing host '#{source_host}' → '#{target_host}'"
 
     # Process line by line to avoid loading large files into memory
     temp_file = "#{dump_file}.tmp"
-    regex = /\b#{Regexp.escape(source_schema)}\b/
+    schema_regex = /\b#{Regexp.escape(source_schema)}\b/
+    host_regex = /\b#{Regexp.escape(source_host)}\b/
 
     File.open(temp_file, 'w') do |output|
       File.foreach(dump_file) do |line|
-        output.write(line.gsub(regex, target_schema))
+        transformed = line.gsub(schema_regex, target_schema)
+        transformed = transformed.gsub(host_regex, target_host)
+        output.write(transformed)
       end
     end
 
     FileUtils.mv(temp_file, dump_file)
-    puts "✓ Schema replaced"
+    puts "✓ Schema and host replaced"
   end
 
   def generate_uuid_mapping(dump_file)

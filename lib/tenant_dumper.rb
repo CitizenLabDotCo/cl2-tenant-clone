@@ -7,6 +7,8 @@ require_relative 's3_files_copier'
 
 class TenantDumper
   def dump(source_host, clone_id: nil)
+    validate_source_host!(source_host)
+
     clone_id ||= SecureRandom.uuid
     schema_name = DatabaseHelpers.host_to_schema(source_host)
 
@@ -103,5 +105,13 @@ class TenantDumper
 
       JSON.parse(result[0]['row_to_json'])
     end
+  end
+
+  def validate_source_host!(host)
+    return if host.include?('.')
+
+    raise ArgumentError, "Source host '#{host}' must contain at least one dot. " \
+      "Hosts without dots (like 'localhost') cannot be cloned because the schema name " \
+      "would match the host, causing data corruption during schema replacement."
   end
 end

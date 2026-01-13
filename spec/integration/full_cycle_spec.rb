@@ -4,7 +4,7 @@ require 'tenant_restorer'
 require 's3_uploader'
 
 RSpec.describe 'Full dump and restore cycle' do
-  let(:source_host) { 'localhost' }
+  let(:source_host) { 'source.govocal.com' }
   let(:target_host) { 'copy.govocal.com' }
   let(:source_schema) { DatabaseHelpers.host_to_schema(source_host) }
   let(:target_schema) { DatabaseHelpers.host_to_schema(target_host) }
