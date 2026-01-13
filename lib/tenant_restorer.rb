@@ -36,29 +36,18 @@ class TenantRestorer
 
       # Step 5: Generate UUID mappings and replace
       uuid_mapping = generate_uuid_mapping(original_dump)
+      # Use clone_id as the new tenant ID (allows Admin HQ to know tenant ID upfront)
+      uuid_mapping[source_tenant['id']] = clone_id
       replace_uuids_in_file(working_dump, uuid_mapping)
 
       # Step 6: Restore dump to database
       restore_dump_to_database(working_dump)
 
-      # Step 7: Create tenant row
-      new_tenant_id = uuid_mapping[source_tenant['id']]
-      if !new_tenant_id
-        ErrorReporter.report_msg(
-          "Tenant ID not found in UUID mapping during restore",
-          extra: {
-            source_tenant_id: source_tenant['id'],
-            clone_id: clone_id,
-            target_host: target_host,
-            mapping_size: uuid_mapping.size
-          }
-        )
-        new_tenant_id = SecureRandom.uuid
-      end
-      create_tenant_row(source_tenant, target_host, new_tenant_id)
+      # Step 7: Create tenant row (using clone_id as the new tenant ID)
+      create_tenant_row(source_tenant, target_host, clone_id)
 
       # Step 8: Copy S3 files from clone bucket to tenant bucket
-      copy_s3_files_from_clone_bucket(clone_id, new_tenant_id, uuid_mapping)
+      copy_s3_files_from_clone_bucket(clone_id, clone_id, uuid_mapping)
 
       # Step 9: Clean up clone folder from S3
       delete_clone_folder(clone_id)
