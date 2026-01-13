@@ -18,6 +18,8 @@ Service for cloning Go Vocal tenants. Dumps PostgreSQL schemas and S3 files, the
 
 ## Usage
 
+**Note:** Source hosts must contain at least one dot. For local development, rename `localhost` to `localhost.govocal.com`.
+
 ### Manual Testing
 
 Dump a tenant:
@@ -54,7 +56,7 @@ curl -u guest:guest -X POST http://localhost:8088/api/exchanges/%2F/cl2back/publ
       "app_id": "admin-hq"
     },
     "routing_key": "tenant_clone.dump_requested",
-    "payload": "{\"source_cluster\":\"local\",\"target_cluster\":\"local\",\"clone_id\":\"test-123\",\"source_host\":\"localhost\",\"target_host\":\"clone.govocal.com\"}",
+    "payload": "{\"source_cluster\":\"local\",\"target_cluster\":\"local\",\"clone_id\":\"test-123\",\"source_host\":\"localhost.govocal.com\",\"target_host\":\"clone.govocal.com\"}",
     "payload_encoding": "string"
   }'
 ```
@@ -70,7 +72,7 @@ curl -u guest:guest -X POST http://localhost:8088/api/exchanges/%2F/cl2back/publ
       "app_id": "admin-hq"
     },
     "routing_key": "tenant_clone.restore_requested",
-    "payload": "{\"source_cluster\":\"local\",\"target_cluster\":\"local\",\"clone_id\":\"test-123\",\"source_host\":\"localhost\",\"target_host\":\"clone.govocal.com\"}",
+    "payload": "{\"source_cluster\":\"local\",\"target_cluster\":\"local\",\"clone_id\":\"test-123\",\"source_host\":\"localhost.govocal.com\",\"target_host\":\"clone.govocal.com\"}",
     "payload_encoding": "string"
   }'
 ```
