@@ -1,5 +1,5 @@
-require_relative '../../tenant_dumper'
-require_relative '../../tenant_restorer'
+require_relative '../tenant_dumper'
+require_relative '../tenant_restorer'
 
 namespace :clone do
   desc "Dump a tenant schema to S3"

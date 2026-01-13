@@ -1,14 +1,17 @@
 require 'fileutils'
 require 'securerandom'
 require 'json'
-require 'set'
 require 'time'
 require_relative 'database_helpers'
 require_relative 's3_uploader'
 require_relative 's3_files_copier'
+require_relative 'error_reporter'
 
 class TenantRestorer
   def restore(clone_id, target_host)
+    # Validate target host before starting restore
+    validate_target_host!(target_host)
+
     original_dump = "/tmp/dump-#{clone_id}.sql"
     working_dump = "/tmp/dump-#{clone_id}-transformed.sql"
 
@@ -41,7 +44,15 @@ class TenantRestorer
       # Step 7: Create tenant row
       new_tenant_id = uuid_mapping[source_tenant['id']]
       if !new_tenant_id
-        puts "⚠ Warning: Tenant ID not found in UUID mapping, generating new UUID"
+        ErrorReporter.report_msg(
+          "Tenant ID not found in UUID mapping during restore",
+          extra: {
+            source_tenant_id: source_tenant['id'],
+            clone_id: clone_id,
+            target_host: target_host,
+            mapping_size: uuid_mapping.size
+          }
+        )
         new_tenant_id = SecureRandom.uuid
       end
       create_tenant_row(source_tenant, target_host, new_tenant_id)
@@ -112,17 +123,23 @@ class TenantRestorer
   def replace_schema_in_file(dump_file, source_schema, target_schema)
     puts "Replacing schema '#{source_schema}' with '#{target_schema}'..."
 
-    # Note: Loads entire file into memory - may not be efficient for very large dumps
-    content = File.read(dump_file)
-    transformed = content.gsub(/\b#{Regexp.escape(source_schema)}\b/, target_schema)
-    File.write(dump_file, transformed)
+    # Process line by line to avoid loading large files into memory
+    temp_file = "#{dump_file}.tmp"
+    regex = /\b#{Regexp.escape(source_schema)}\b/
 
+    File.open(temp_file, 'w') do |output|
+      File.foreach(dump_file) do |line|
+        output.write(line.gsub(regex, target_schema))
+      end
+    end
+
+    FileUtils.mv(temp_file, dump_file)
     puts "✓ Schema replaced"
   end
 
   def generate_uuid_mapping(dump_file)
     puts "Extracting primary key UUIDs..."
-    uuids = extract_primary_key_uuids(dump_file)
+    uuids = DatabaseHelpers.extract_primary_key_uuids(dump_file)
     puts "Found #{uuids.size} unique UUIDs"
 
     puts "Generating new UUIDs..."
@@ -133,57 +150,32 @@ class TenantRestorer
     mapping
   end
 
-  def extract_primary_key_uuids(dump_file)
-    uuids = Set.new
-    in_copy_block = false
-    id_column_index = nil
-
-    File.foreach(dump_file) do |line|
-      # Detect COPY statement and find 'id' column position
-      if line =~ /^COPY .+\((.*)\) FROM stdin;$/
-        columns = $1.split(',').map(&:strip)
-        id_column_index = columns.index('id')
-        in_copy_block = true
-        next
-      end
-
-      # End of COPY block
-      if line.start_with?('\\.')
-        in_copy_block = false
-        id_column_index = nil
-        next
-      end
-
-      # Extract UUID from 'id' column in COPY data
-      if in_copy_block && id_column_index
-        values = line.split("\t")
-        id_value = values[id_column_index]&.strip
-        if id_value && id_value =~ DatabaseHelpers::UUID_REGEX
-          uuids.add(id_value.downcase)
-        end
-      end
-    end
-
-    uuids.to_a
-  end
 
   def replace_uuids_in_file(dump_file, uuid_mapping)
     puts "Replacing UUIDs in dump..."
 
-    # Note: Loads entire file into memory - may not be efficient for very large dumps
-    content = File.read(dump_file)
-    content = content.gsub(DatabaseHelpers::UUID_REGEX) do |uuid|
-      uuid_mapping[uuid.downcase] || uuid
-    end
-    File.write(dump_file, content)
+    # Process line by line to avoid loading large files into memory
+    temp_file = "#{dump_file}.tmp"
 
+    File.open(temp_file, 'w') do |output|
+      File.foreach(dump_file) do |line|
+        transformed_line = line.gsub(DatabaseHelpers::UUID_REGEX) do |uuid|
+          uuid_mapping[uuid.downcase] || uuid
+        end
+        output.write(transformed_line)
+      end
+    end
+
+    FileUtils.mv(temp_file, dump_file)
     puts "✓ UUIDs replaced"
   end
 
   def restore_dump_to_database(dump_file)
     puts "Restoring dump to database..."
 
-    success = system('psql', '-f', dump_file)
+    # Use -q (quiet) to suppress NOTICE messages
+    # Redirect stderr to /dev/null to suppress verbose DROP CASCADE and other messages
+    success = system('psql', '-q', '-f', dump_file, err: File::NULL)
 
     if !success
       raise "psql failed with exit code #{$?.exitstatus}"
@@ -209,16 +201,13 @@ class TenantRestorer
     # to cl2-tenant-setup service in the future.
     new_tenant['creation_finalized_at'] = now
 
-    # Build INSERT dynamically from all keys
-    columns = new_tenant.keys.join(', ')
-    values = new_tenant.values.map { |v| DatabaseHelpers.quote_value(v) }.join(', ')
+    DatabaseHelpers.with_connection do |conn|
+      # Build parameterized INSERT dynamically
+      columns = new_tenant.keys
+      placeholders = (1..columns.size).map { |i| "$#{i}" }.join(', ')
+      sql = "INSERT INTO public.tenants (#{columns.join(', ')}) VALUES (#{placeholders});"
 
-    sql = "INSERT INTO public.tenants (#{columns}) VALUES (#{values});"
-
-    success = system('psql', '-c', sql)
-
-    if !success
-      raise "Failed to create tenant row"
+      conn.exec_params(sql, new_tenant.values)
     end
 
     puts "✓ Tenant row created: #{new_tenant['name']} (#{target_host})"
@@ -233,6 +222,28 @@ class TenantRestorer
     count = uploader.delete_prefix(prefix: "#{clone_id}/")
     puts "✓ Deleted #{count} objects from clone bucket"
   rescue => e
-    puts "⚠ Warning: Could not delete clone folder: #{e.message}"
+    ErrorReporter.report(e, extra: {
+      clone_id: clone_id,
+      bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      operation: 'delete_clone_folder'
+    })
+  end
+
+  def validate_target_host!(host)
+    # Check host format - only allow .govocal.com domains
+    if !host.end_with?('.govocal.com')
+      raise ArgumentError, "Invalid host format: '#{host}'. Only hosts ending with '.govocal.com' are allowed."
+    end
+
+    # Check if host already exists in tenants table (including soft-deleted)
+    if DatabaseHelpers.host_exists?(host)
+      raise ArgumentError, "Target host '#{host}' already exists in public.tenants table. Cannot overwrite existing tenant."
+    end
+
+    # Check if corresponding schema already exists
+    schema_name = DatabaseHelpers.host_to_schema(host)
+    if DatabaseHelpers.schema_exists?(schema_name)
+      raise ArgumentError, "Target schema '#{schema_name}' already exists. Cannot overwrite existing schema."
+    end
   end
 end

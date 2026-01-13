@@ -1,11 +1,11 @@
 require 'pg'
-require_relative '../../tenant_dumper'
-require_relative '../../tenant_restorer'
-require_relative '../../s3_uploader'
+require 'tenant_dumper'
+require 'tenant_restorer'
+require 's3_uploader'
 
 RSpec.describe 'Full dump and restore cycle' do
   let(:source_host) { 'localhost' }
-  let(:target_host) { 'copy.localhost' }
+  let(:target_host) { 'copy.govocal.com' }
   let(:source_schema) { DatabaseHelpers.host_to_schema(source_host) }
   let(:target_schema) { DatabaseHelpers.host_to_schema(target_host) }
   let(:fixture_path) { File.join(__dir__, '../fixtures') }

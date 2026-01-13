@@ -1,4 +1,4 @@
-require_relative '../tenant_restorer'
+require 'tenant_restorer'
 require 'tempfile'
 
 RSpec.describe TenantRestorer do
@@ -138,6 +138,43 @@ RSpec.describe TenantRestorer do
         expect(result.scan(new_user_id).size).to eq(3)
       ensure
         file.unlink
+      end
+    end
+  end
+
+  describe '#restore', :database => true do
+    let(:clone_id) { 'test-clone-123' }
+
+    describe 'target host validation' do
+      it 'rejects hosts not ending with .govocal.com' do
+        expect {
+          restorer.restore(clone_id, 'invalid.example.com')
+        }.to raise_error(ArgumentError, /Invalid host format.*Only hosts ending with '\.govocal\.com' are allowed/)
+      end
+
+      it 'rejects hosts that already exist in public.tenants' do
+        # Create an existing tenant
+        DatabaseHelpers.with_connection do |conn|
+          conn.exec_params(
+            "INSERT INTO public.tenants (id, name, host, created_at, updated_at) VALUES ($1, $2, $3, $4, $5);",
+            [SecureRandom.uuid, 'Existing Tenant', 'existing.govocal.com', Time.now, Time.now]
+          )
+        end
+
+        expect {
+          restorer.restore(clone_id, 'existing.govocal.com')
+        }.to raise_error(ArgumentError, /Target host 'existing\.govocal\.com' already exists in public\.tenants table/)
+      end
+
+      it 'rejects hosts whose schema already exists' do
+        # Create a schema for the target host
+        DatabaseHelpers.with_connection do |conn|
+          conn.exec("CREATE SCHEMA IF NOT EXISTS test_govocal_com;")
+        end
+
+        expect {
+          restorer.restore(clone_id, 'test.govocal.com')
+        }.to raise_error(ArgumentError, /Target schema 'test_govocal_com' already exists/)
       end
     end
   end

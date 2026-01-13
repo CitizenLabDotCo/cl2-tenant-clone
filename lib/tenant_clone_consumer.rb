@@ -1,4 +1,5 @@
 require 'json'
+require_relative 'error_reporter'
 require_relative 'tenant_dumper'
 require_relative 'tenant_restorer'
 
@@ -117,6 +118,16 @@ class TenantCloneConsumer
       puts e.backtrace.join("\n")
       puts ""
 
+      # Report to Sentry with context
+      ErrorReporter.report(e, extra: {
+        operation: operation_type,
+        clone_id: message['clone_id'],
+        source_cluster: message['source_cluster'],
+        target_cluster: message['target_cluster'],
+        source_host: message['source_host'],
+        target_host: message['target_host']
+      })
+
       # Publish operation_failed event
       publish_event("tenant_clone.#{operation_type}_failed",
         message.merge(
@@ -130,13 +141,16 @@ class TenantCloneConsumer
   end
 
   def publish_event(routing_key, event)
-    @conn.create_channel.tap do |channel|
+    channel = @conn.create_channel
+    begin
       channel.topic(TOPIC).publish(
         event.to_json,
         app_id: 'cl2-tenant-clone',
         content_type: 'application/json',
         routing_key: routing_key
       )
-    end.close
+    ensure
+      channel.close
+    end
   end
 end

@@ -32,9 +32,8 @@ class TenantDumper
     temp_file = "/tmp/dump-#{clone_id}.sql"
     puts "Dumping schema '#{schema_name}'..."
 
-    # Dump to temporary file
-    cmd = build_dump_command(schema_name, temp_file)
-    success = system(cmd)
+    # Dump to temporary file using array form to prevent shell injection
+    success = system('pg_dump', '--schema', schema_name, '--no-owner', '--no-acl', '--file', temp_file)
 
     if !success
       FileUtils.rm_f(temp_file)
@@ -93,24 +92,16 @@ class TenantDumper
     puts "✓ Copied #{count} files to S3"
   end
 
-  def build_dump_command(schema_name, dump_file)
-    [
-      'pg_dump',
-      '--schema', schema_name,
-      '--no-owner',
-      '--no-acl',
-      '--file', dump_file
-    ].join(' ')
-  end
-
   def fetch_tenant_row(host)
-    sql = "SELECT row_to_json(t) FROM (SELECT * FROM public.tenants WHERE host = '#{DatabaseHelpers.escape_sql(host)}') t;"
-    result = `psql -t -A -c "#{sql}"`.strip
+    DatabaseHelpers.with_connection do |conn|
+      sql = "SELECT row_to_json(t) FROM (SELECT * FROM public.tenants WHERE host = $1) t;"
+      result = conn.exec_params(sql, [host])
 
-    if result.empty?
-      raise "No tenant found for host: #{host}"
+      if result.ntuples == 0
+        raise "No tenant found for host: #{host}"
+      end
+
+      JSON.parse(result[0]['row_to_json'])
     end
-
-    JSON.parse(result)
   end
 end
