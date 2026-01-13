@@ -8,7 +8,7 @@ require_relative 's3_files_copier'
 require_relative 'error_reporter'
 
 class TenantRestorer
-  def restore(clone_id, target_host)
+  def restore(clone_id, target_host, target_name)
     # Validate target host before starting restore
     validate_target_host!(target_host)
 
@@ -44,7 +44,7 @@ class TenantRestorer
       restore_dump_to_database(working_dump)
 
       # Step 7: Create tenant row (using clone_id as the new tenant ID)
-      create_tenant_row(source_tenant, target_host, clone_id)
+      create_tenant_row(source_tenant, target_host, target_name, clone_id)
 
       # Step 8: Copy S3 files from clone bucket to tenant bucket
       copy_s3_files_from_clone_bucket(clone_id, clone_id, uuid_mapping)
@@ -173,15 +173,15 @@ class TenantRestorer
     puts "✓ Dump restored to database"
   end
 
-  def create_tenant_row(source_tenant, target_host, new_tenant_id)
+  def create_tenant_row(source_tenant, target_host, target_name, target_tenant_id)
     puts "Creating tenant row..."
 
     # Start with all source tenant data
     new_tenant = source_tenant.dup
 
     # Update only the fields that need to change
-    new_tenant['id'] = new_tenant_id
-    new_tenant['name'] = "#{source_tenant['name']} Copy"
+    new_tenant['id'] = target_tenant_id
+    new_tenant['name'] = target_name
     new_tenant['host'] = target_host
     now = Time.now.utc.iso8601
     new_tenant['created_at'] = now

@@ -144,17 +144,18 @@ RSpec.describe TenantRestorer do
 
   describe '#restore', :database => true do
     let(:clone_id) { 'test-clone-123' }
+    let(:target_name) { 'Tenant Clone' }
 
     describe 'target host validation' do
       it 'rejects hosts not ending with .govocal.com' do
         expect {
-          restorer.restore(clone_id, 'invalid.example.com')
+          restorer.restore(clone_id, 'invalid.example.com', target_name)
         }.to raise_error(ArgumentError, /Invalid host format.*Only hosts ending with '\.govocal\.com' are allowed/)
       end
 
       it 'rejects hosts containing hyphens' do
         expect {
-          restorer.restore(clone_id, 'demo-test.stg.govocal.com')
+          restorer.restore(clone_id, 'demo-test.stg.govocal.com', target_name)
         }.to raise_error(ArgumentError, /Hyphens are not allowed/)
       end
 
@@ -168,7 +169,7 @@ RSpec.describe TenantRestorer do
         end
 
         expect {
-          restorer.restore(clone_id, 'existing.govocal.com')
+          restorer.restore(clone_id, 'existing.govocal.com', target_name)
         }.to raise_error(ArgumentError, /Target host 'existing\.govocal\.com' already exists in public\.tenants table/)
       end
 
@@ -179,7 +180,7 @@ RSpec.describe TenantRestorer do
         end
 
         expect {
-          restorer.restore(clone_id, 'test.govocal.com')
+          restorer.restore(clone_id, 'test.govocal.com', target_name)
         }.to raise_error(ArgumentError, /Target schema 'test_govocal_com' already exists/)
       end
     end
