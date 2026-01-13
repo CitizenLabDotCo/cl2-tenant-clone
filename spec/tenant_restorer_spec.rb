@@ -152,6 +152,12 @@ RSpec.describe TenantRestorer do
         }.to raise_error(ArgumentError, /Invalid host format.*Only hosts ending with '\.govocal\.com' are allowed/)
       end
 
+      it 'rejects hosts containing hyphens' do
+        expect {
+          restorer.restore(clone_id, 'demo-test.stg.govocal.com')
+        }.to raise_error(ArgumentError, /Hyphens are not allowed/)
+      end
+
       it 'rejects hosts that already exist in public.tenants' do
         # Create an existing tenant
         DatabaseHelpers.with_connection do |conn|

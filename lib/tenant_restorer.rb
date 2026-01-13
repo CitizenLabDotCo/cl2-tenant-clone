@@ -235,6 +235,11 @@ class TenantRestorer
       raise ArgumentError, "Invalid host format: '#{host}'. Only hosts ending with '.govocal.com' are allowed."
     end
 
+    # Reject hyphens - they cause SQL syntax errors in unquoted schema names
+    if host.include?('-')
+      raise ArgumentError, "Invalid host format: '#{host}'. Hyphens are not allowed because they cause SQL syntax errors in schema names."
+    end
+
     # Check if host already exists in tenants table (including soft-deleted)
     if DatabaseHelpers.host_exists?(host)
       raise ArgumentError, "Target host '#{host}' already exists in public.tenants table. Cannot overwrite existing tenant."
