@@ -96,7 +96,7 @@ jobs:
       - run:
           name: Deploy to << parameters.cluster_name >>
           command: |
-            ssh -o StrictHostKeyChecking=no ubuntu@${<< parameters.ssh_host >>} \<< 'EOF'
+            ssh -o StrictHostKeyChecking=no ubuntu@${<< parameters.ssh_host >>} \<< EOF
               set -e
               echo "Pulling latest image..."
               docker pull citizenlabdotco/cl2-tenant-clone:$CIRCLE_BRANCH
