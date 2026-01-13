@@ -84,7 +84,7 @@ jobs:
 
   deploy-to-swarm:
     docker:
-      - image: buildo/alpine-ssh
+      - image: cimg/base:2026.01
     parameters:
       ssh_host:
         type: env_var_name
