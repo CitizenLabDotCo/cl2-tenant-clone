@@ -49,14 +49,14 @@ class TenantRestorer
       # Step 8: Copy S3 files from clone bucket to tenant bucket
       copy_s3_files_from_clone_bucket(clone_id, clone_id, uuid_mapping)
 
-      # Step 9: Clean up clone folder from S3
-      delete_clone_folder(clone_id)
-
       puts "✓ Restore completed"
     ensure
       # Clean up temporary files
       FileUtils.rm_f(original_dump)
       FileUtils.rm_f(working_dump)
+
+      # Clean up clone folder from S3 (whether success or failure)
+      delete_clone_folder(clone_id)
     end
   end
 
