@@ -4,7 +4,7 @@ require 'tenant_restorer'
 require 's3_uploader'
 
 RSpec.describe 'Full dump and restore cycle' do
-  let(:source_host) { 'localhost' }
+  let(:source_host) { 'source.govocal.com' }
   let(:target_host) { 'copy.govocal.com' }
   let(:source_schema) { DatabaseHelpers.host_to_schema(source_host) }
   let(:target_schema) { DatabaseHelpers.host_to_schema(target_host) }
@@ -62,7 +62,7 @@ RSpec.describe 'Full dump and restore cycle' do
     tenant_json = File.read(File.join(fixture_path, 'tenant.json'))
     tenant_data = JSON.parse(tenant_json)
     restorer = TenantRestorer.new
-    restorer.send(:create_tenant_row, tenant_data, source_host, tenant_data['id'])
+    restorer.send(:create_tenant_row, tenant_data, source_host, tenant_data['name'], tenant_data['id'])
 
     # Upload fixture files to S3
     upload_fixture_files(tenant_data['id'])
@@ -86,7 +86,7 @@ RSpec.describe 'Full dump and restore cycle' do
 
     # Restore
     restorer = TenantRestorer.new
-    restorer.restore(clone_id, target_host)
+    restorer.restore(clone_id, target_host, 'Tenant Clone')
 
     # Verify data: 1 user with email hello@govocal.com
     user_count = db.exec("SELECT COUNT(*) FROM #{target_schema}.users").getvalue(0, 0).to_i
@@ -103,7 +103,7 @@ RSpec.describe 'Full dump and restore cycle' do
     # Verify tenant row created
     tenant = db.exec("SELECT * FROM public.tenants WHERE host = $1", [target_host]).first
     expect(tenant).not_to be_nil
-    expect(tenant['name']).to include('Copy')
+    expect(tenant['name']).to eq('Tenant Clone')
 
     # Verify S3 files copied
     copied_count = s3_count(cluster_uploader, "uploads/#{tenant['id']}/")

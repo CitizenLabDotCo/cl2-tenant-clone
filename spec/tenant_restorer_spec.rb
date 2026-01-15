@@ -47,19 +47,20 @@ RSpec.describe TenantRestorer do
     end
   end
 
-  describe '#replace_schema_in_file' do
-    it 'replaces schema name only at word boundaries' do
+  describe '#replace_schema_and_host_in_file' do
+    it 'replaces schema name and host only at word boundaries' do
       dump_content = <<~SQL
-        SET search_path = demo, pg_catalog;
+        SET search_path = demo_govocal_com, pg_catalog;
 
-        CREATE TABLE demo.users (id uuid PRIMARY KEY);
-        CREATE TABLE demonstration.examples (id uuid PRIMARY KEY);
+        CREATE TABLE demo_govocal_com.users (id uuid PRIMARY KEY);
+        CREATE TABLE demo_govocal_com_backup.examples (id uuid PRIMARY KEY);
 
-        COPY demo.users (id, name) FROM stdin;
+        COPY demo_govocal_com.users (id, name) FROM stdin;
         \\.
 
-        -- Comment about demo schema
-        INSERT INTO demo.settings VALUES ('demo_mode', 'false');
+        -- Comment about demo_govocal_com schema
+        INSERT INTO demo_govocal_com.app_configurations VALUES ('demo.govocal.com');
+        INSERT INTO demo_govocal_com.settings VALUES ('subdemo.govocal.com.extra');
       SQL
 
       file = Tempfile.new(['test_schema', '.sql'])
@@ -67,20 +68,24 @@ RSpec.describe TenantRestorer do
         file.write(dump_content)
         file.close
 
-        restorer.send(:replace_schema_in_file, file.path, 'demo', 'production')
+        restorer.send(:replace_schema_and_host_in_file, file.path, 'demo_govocal_com', 'production_govocal_com', 'demo.govocal.com', 'production.govocal.com')
 
         result = File.read(file.path)
 
-        # Should replace 'demo' schema references
-        expect(result).to include('SET search_path = production, pg_catalog;')
-        expect(result).to include('CREATE TABLE production.users')
-        expect(result).to include('COPY production.users')
-        expect(result).to include('INSERT INTO production.settings')
-        expect(result).to include("Comment about production schema")
+        # Should replace schema references
+        expect(result).to include('SET search_path = production_govocal_com, pg_catalog;')
+        expect(result).to include('CREATE TABLE production_govocal_com.users')
+        expect(result).to include('COPY production_govocal_com.users')
+        expect(result).to include("Comment about production_govocal_com schema")
 
-        # Should NOT replace 'demo' when it's part of another word
-        expect(result).to include('CREATE TABLE demonstration.examples')
-        expect(result).to include("VALUES ('demo_mode', 'false')")
+        # Should replace host in data
+        expect(result).to include("VALUES ('production.govocal.com')")
+
+        # Should NOT replace schema when it's part of another word
+        expect(result).to include('CREATE TABLE demo_govocal_com_backup.examples')
+
+        # Should NOT replace host when it's part of another word
+        expect(result).to include("VALUES ('subdemo.govocal.com.extra')")
       ensure
         file.unlink
       end
@@ -144,17 +149,18 @@ RSpec.describe TenantRestorer do
 
   describe '#restore', :database => true do
     let(:clone_id) { 'test-clone-123' }
+    let(:target_name) { 'Tenant Clone' }
 
     describe 'target host validation' do
       it 'rejects hosts not ending with .govocal.com' do
         expect {
-          restorer.restore(clone_id, 'invalid.example.com')
+          restorer.restore(clone_id, 'invalid.example.com', target_name)
         }.to raise_error(ArgumentError, /Invalid host format.*Only hosts ending with '\.govocal\.com' are allowed/)
       end
 
       it 'rejects hosts containing hyphens' do
         expect {
-          restorer.restore(clone_id, 'demo-test.stg.govocal.com')
+          restorer.restore(clone_id, 'demo-test.stg.govocal.com', target_name)
         }.to raise_error(ArgumentError, /Hyphens are not allowed/)
       end
 
@@ -168,7 +174,7 @@ RSpec.describe TenantRestorer do
         end
 
         expect {
-          restorer.restore(clone_id, 'existing.govocal.com')
+          restorer.restore(clone_id, 'existing.govocal.com', target_name)
         }.to raise_error(ArgumentError, /Target host 'existing\.govocal\.com' already exists in public\.tenants table/)
       end
 
@@ -179,7 +185,7 @@ RSpec.describe TenantRestorer do
         end
 
         expect {
-          restorer.restore(clone_id, 'test.govocal.com')
+          restorer.restore(clone_id, 'test.govocal.com', target_name)
         }.to raise_error(ArgumentError, /Target schema 'test_govocal_com' already exists/)
       end
     end

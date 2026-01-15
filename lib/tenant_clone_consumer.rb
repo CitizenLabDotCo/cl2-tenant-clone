@@ -79,16 +79,18 @@ class TenantCloneConsumer
 
     clone_id = message['clone_id']
     target_host = message['target_host']
+    target_name = message['target_name']
 
     puts "[RESTORE] Processing request:"
     puts "  Clone ID: #{clone_id}"
     puts "  Source cluster: #{message['source_cluster']}"
     puts "  Source host: #{message['source_host']}"
     puts "  Target host: #{target_host}"
+    puts "  Target name: #{target_name}"
 
     process_request(message, 'restore') do
       restorer = TenantRestorer.new
-      restorer.restore(clone_id, target_host)
+      restorer.restore(clone_id, target_host, target_name)
     end
   end
 
