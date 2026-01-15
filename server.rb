@@ -1,5 +1,6 @@
 require 'bunny'
 require 'sentry-ruby'
+require_relative 'lib/log'
 require_relative 'lib/tenant_clone_consumer'
 
 # Disable output buffering for Docker logs
@@ -20,11 +21,10 @@ end
 Sentry.set_tags(cluster: CLUSTER_NAME)
 
 if ENV['SENTRY_DSN']
-  puts "Sentry initialized for cluster: #{CLUSTER_NAME}"
+  Log.info("✓ Sentry initialized for cluster: #{CLUSTER_NAME}")
 else
-  puts "Sentry DSN not configured - error tracking disabled"
+  Log.warn('Sentry DSN not configured - error tracking disabled')
 end
-puts ""
 
 # Helper to sanitize URIs for logging
 def sanitize_uri(uri)
@@ -32,14 +32,11 @@ def sanitize_uri(uri)
 end
 
 # Connect to RabbitMQ
-puts "Connecting to RabbitMQ..."
-puts "  URI: #{sanitize_uri(RABBITMQ_URI)}"
-puts "  Cluster: #{CLUSTER_NAME}"
+Log.info("Connecting to RabbitMQ at #{sanitize_uri(RABBITMQ_URI)}...")
 
 conn = Bunny.new(RABBITMQ_URI)
 conn.start
-puts "✓ Connected to RabbitMQ"
-puts ""
+Log.info('✓ Connected to RabbitMQ')
 
 # Set up consumer
 channel = conn.create_channel
@@ -48,15 +45,14 @@ exchange = channel.topic(TenantCloneConsumer::TOPIC)
 consumer = TenantCloneConsumer.new(conn, CLUSTER_NAME)
 consumer.subscribe_to_queues(channel, exchange)
 
-puts "✓ cl2-tenant-clone is ready and listening for messages"
-puts "Press Ctrl+C to stop"
-puts ""
+Log.info('✓ cl2-tenant-clone is ready and listening for messages')
+puts 'Press Ctrl+C to stop'
 
 # Keep the process running
 begin
   sleep
 rescue Interrupt
-  puts "\nShutting down..."
+  Log.info('Shutting down...')
   conn.close
   exit 0
 end

@@ -1,4 +1,5 @@
 require 'json'
+require_relative 'log'
 require_relative 'error_reporter'
 require_relative 'tenant_dumper'
 require_relative 'tenant_restorer'
@@ -23,9 +24,7 @@ class TenantCloneConsumer
     queue = channel.queue(queue_name, durable: true)
     queue.bind(exchange, routing_key: 'tenant_clone.dump_requested')
 
-    puts "Listening for dump requests on queue: #{queue_name}"
-    puts "  Routing key: tenant_clone.dump_requested"
-    puts ""
+    Log.info("Listening for dump requests on queue: #{queue_name}")
 
     queue.subscribe(block: false, manual_ack: false) do |delivery_info, properties, payload_json|
       message = JSON.parse(payload_json)
@@ -38,9 +37,7 @@ class TenantCloneConsumer
     queue = channel.queue(queue_name, durable: true)
     queue.bind(exchange, routing_key: 'tenant_clone.restore_requested')
 
-    puts "Listening for restore requests on queue: #{queue_name}"
-    puts "  Routing key: tenant_clone.restore_requested"
-    puts ""
+    Log.info("Listening for restore requests on queue: #{queue_name}")
 
     queue.subscribe(block: false, manual_ack: false) do |delivery_info, properties, payload_json|
       message = JSON.parse(payload_json)
@@ -51,18 +48,16 @@ class TenantCloneConsumer
   def handle_dump_request(message)
     # Only process if we are the SOURCE cluster
     if message['source_cluster'] != @cluster_name
-      puts "[SKIP] Dump request not for this cluster (source: #{message['source_cluster']}, me: #{@cluster_name})"
+      Log.debug('Skipping dump request - not for this cluster',
+        source_cluster: message['source_cluster'], this_cluster: @cluster_name)
       return
     end
 
     clone_id = message['clone_id']
     source_host = message['source_host']
 
-    puts "[DUMP] Processing request:"
-    puts "  Clone ID: #{clone_id}"
-    puts "  Source host: #{source_host}"
-    puts "  Target cluster: #{message['target_cluster']}"
-    puts "  Target host: #{message['target_host']}"
+    Log.info("[DUMP] Processing: #{source_host} -> #{message['target_host']}",
+      clone_id: clone_id)
 
     process_request(message, 'dump') do
       dumper = TenantDumper.new
@@ -73,7 +68,8 @@ class TenantCloneConsumer
   def handle_restore_request(message)
     # Only process if we are the TARGET cluster
     if message['target_cluster'] != @cluster_name
-      puts "[SKIP] Restore request not for this cluster (target: #{message['target_cluster']}, me: #{@cluster_name})"
+      Log.debug('Skipping restore request - not for this cluster',
+        target_cluster: message['target_cluster'], this_cluster: @cluster_name)
       return
     end
 
@@ -81,12 +77,8 @@ class TenantCloneConsumer
     target_host = message['target_host']
     target_name = message['target_name']
 
-    puts "[RESTORE] Processing request:"
-    puts "  Clone ID: #{clone_id}"
-    puts "  Source cluster: #{message['source_cluster']}"
-    puts "  Source host: #{message['source_host']}"
-    puts "  Target host: #{target_host}"
-    puts "  Target name: #{target_name}"
+    Log.info("[RESTORE] Processing: #{message['source_host']} -> #{target_host} (#{target_name})",
+      clone_id: clone_id)
 
     process_request(message, 'restore') do
       restorer = TenantRestorer.new
@@ -95,6 +87,8 @@ class TenantCloneConsumer
   end
 
   def process_request(message, operation_type)
+    clone_id = message['clone_id']
+
     begin
       # Publish operation_started event
       publish_event("tenant_clone.#{operation_type}_started",
@@ -113,17 +107,14 @@ class TenantCloneConsumer
           'timestamp' => Time.now.iso8601
         ))
 
-      puts "✓ #{operation_type.capitalize} completed successfully"
-      puts ""
+      Log.info("✓ #{operation_type.capitalize} completed successfully", clone_id: clone_id)
     rescue StandardError => e
-      puts "✗ #{operation_type.capitalize} failed: #{e.message}"
-      puts e.backtrace.join("\n")
-      puts ""
+      Log.error("✗ #{operation_type.capitalize} failed: #{e.message}", clone_id: clone_id)
 
       # Report to Sentry with context
       ErrorReporter.report(e, extra: {
         operation: operation_type,
-        clone_id: message['clone_id'],
+        clone_id: clone_id,
         source_cluster: message['source_cluster'],
         target_cluster: message['target_cluster'],
         source_host: message['source_host'],

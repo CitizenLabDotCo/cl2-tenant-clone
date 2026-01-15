@@ -1,4 +1,5 @@
 require 'aws-sdk-s3'
+require_relative 'log'
 require_relative 'database_helpers'
 require_relative 's3_helpers'
 
@@ -19,9 +20,9 @@ class S3FilesCopier
     count = 0
     source_prefix = "uploads/#{source_tenant_id}/"
 
-    puts "  Listing objects in tenant bucket..."
+    Log.info('Listing objects in tenant bucket...')
     objects = list_objects(@source_bucket, source_prefix)
-    puts "  Found #{objects.size} objects to copy"
+    Log.info("Found #{objects.size} objects to copy")
 
     objects.each do |object|
       source_key = object.key
@@ -43,10 +44,10 @@ class S3FilesCopier
         count += 1
 
         # Progress indicator every 50 files
-        puts "  Copied #{count} files..." if count % 50 == 0
+        Log.debug("Copied #{count} files...") if count % 50 == 0
       rescue Aws::S3::Errors::NoSuchKey
         # File was deleted between listing and copying, skip it
-        puts "  Skipped missing file: #{source_key}"
+        Log.warn("Skipped missing file: #{source_key}")
       end
     end
 
@@ -60,9 +61,9 @@ class S3FilesCopier
     count = 0
     source_prefix = "#{clone_id}/uploads/"
 
-    puts "  Listing objects in clone bucket..."
+    Log.info('Listing objects in clone bucket...')
     objects = list_objects(@source_bucket, source_prefix)
-    puts "  Found #{objects.size} objects to copy"
+    Log.info("Found #{objects.size} objects to copy")
 
     objects.each do |object|
       source_key = object.key
@@ -88,10 +89,10 @@ class S3FilesCopier
         count += 1
 
         # Progress indicator every 50 files
-        puts "  Copied #{count} files..." if count % 50 == 0
+        Log.debug("Copied #{count} files...") if count % 50 == 0
       rescue Aws::S3::Errors::NoSuchKey
         # File was deleted between listing and copying, skip it
-        puts "  Skipped missing file: #{source_key}"
+        Log.warn("Skipped missing file: #{source_key}")
       end
     end
 
