@@ -3,7 +3,7 @@ require_relative 'database_helpers'
 require_relative 's3_helpers'
 
 class S3FilesCopier
-  THREAD_COUNT = 10
+  THREAD_COUNT = 20
 
   def initialize(source_bucket:, dest_bucket:, region:)
     @source_bucket = source_bucket
