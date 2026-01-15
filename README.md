@@ -18,6 +18,8 @@ Service for cloning Go Vocal tenants. Dumps PostgreSQL schemas and S3 files, the
 
 ## Usage
 
+When running locally, make sure the web service is running with the environment variable `USE_AWS_S3_IN_DEV` set to `true` (and create a new tenant after turning it on).
+
 **Note:** Source hosts must contain at least one dot. For local development, rename `localhost` to `localhost.govocal.com`.
 
 ### Manual Testing
