@@ -33,7 +33,7 @@ class TenantDumper
 
   def dump_and_upload_sql(schema_name, clone_id)
     temp_file = "/tmp/dump-#{clone_id}.sql"
-    Log.info("Dumping schema '#{schema_name}'...")
+    Log.debug("Dumping schema '#{schema_name}'...")
 
     # Dump to temporary file using array form to prevent shell injection
     success = system('pg_dump', '--schema', schema_name, '--no-owner', '--no-acl', '--file', temp_file)
@@ -43,32 +43,32 @@ class TenantDumper
       raise "pg_dump failed with exit code #{$?.exitstatus}"
     end
 
-    Log.info("✓ SQL dump completed (#{File.size(temp_file)} bytes)")
+    Log.info("✓ SQL dump completed (#{File.size(temp_file)} bytes)", clone_id: clone_id)
 
     # Upload to S3
-    Log.info('Uploading SQL dump to S3...')
+    Log.debug('Uploading SQL dump to S3...')
     uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
       region: ENV['AWS_REGION']
     )
     uploader.upload_file(local_path: temp_file, s3_key: "#{clone_id}/dump.sql")
-    Log.info('✓ SQL dump uploaded to S3')
+    Log.info('✓ SQL dump uploaded to S3', clone_id: clone_id)
 
     # Delete temporary file
     FileUtils.rm_f(temp_file)
   end
 
   def fetch_and_upload_tenant_data(host, clone_id)
-    Log.info("Fetching tenant row for '#{host}'...")
+    Log.debug("Fetching tenant row for '#{host}'...")
 
     # Fetch tenant data into memory
     tenant_data = fetch_tenant_row(host)
     tenant_json = JSON.pretty_generate(tenant_data)
 
-    Log.info('✓ Tenant data fetched')
+    Log.info('✓ Tenant data fetched', clone_id: clone_id)
 
     # Upload directly to S3 (no local file)
-    Log.info('Uploading tenant metadata to S3...')
+    Log.debug('Uploading tenant metadata to S3...')
 
     uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
@@ -76,13 +76,13 @@ class TenantDumper
     )
     uploader.upload_string(content: tenant_json, s3_key: "#{clone_id}/tenant.json")
 
-    Log.info('✓ Tenant metadata uploaded to S3')
+    Log.info('✓ Tenant metadata uploaded to S3', clone_id: clone_id)
 
     tenant_data
   end
 
   def copy_s3_files_to_clone_bucket(source_tenant_id, clone_id)
-    Log.info('Copying S3 files to clone bucket...')
+    Log.debug('Copying S3 files to clone bucket...')
     copier = S3FilesCopier.new(
       source_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
       dest_bucket: ENV['AWS_S3_CLONE_BUCKET'],
@@ -92,7 +92,7 @@ class TenantDumper
       source_tenant_id: source_tenant_id,
       clone_id: clone_id
     )
-    Log.info("✓ Copied #{count} files to S3")
+    Log.info("✓ Copied #{count} files to S3", clone_id: clone_id)
   end
 
   def fetch_tenant_row(host)

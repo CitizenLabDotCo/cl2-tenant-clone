@@ -6,12 +6,16 @@ require 'json'
 # Centralized logger configuration
 # - JSON format for production (CloudWatch can parse and filter fields)
 # - Human-readable format for development
-class LoggerConfig
+#
+# Environment variables:
+#   LOG_LEVEL: DEBUG, INFO, WARN, ERROR (default: INFO)
+#   LOG_FORMAT: json, text (default: text)
+module LoggerConfig
   def self.setup
-    $logger = Logger.new($stdout)
-    $logger.level = log_level
-    $logger.formatter = json_format? ? json_formatter : text_formatter
-    $logger
+    logger = Logger.new($stdout)
+    logger.level = log_level
+    logger.formatter = json_format? ? json_formatter : text_formatter
+    logger
   end
 
   def self.log_level
@@ -22,7 +26,7 @@ class LoggerConfig
   end
 
   def self.json_format?
-    ENV['LOG_FORMAT'] == 'json' || ENV['SENTRY_ENVIRONMENT'] == 'production'
+    ENV['LOG_FORMAT'] == 'json'
   end
 
   def self.json_formatter
@@ -30,6 +34,7 @@ class LoggerConfig
       entry = {
         timestamp: datetime.utc.iso8601(3),
         level: severity,
+        app: 'cl2-tenant-clone',
         cluster: ENV['CLUSTER_NAME']
       }
 
@@ -48,9 +53,10 @@ class LoggerConfig
       timestamp = datetime.strftime('%Y-%m-%d %H:%M:%S')
 
       if msg.is_a?(Hash)
-        message = msg.delete(:message) || msg.delete('message')
-        context = msg.empty? ? '' : " #{msg.inspect}"
-        "[#{timestamp}] #{severity}: #{message}#{context}\n"
+        message = msg[:message]
+        context = msg.except(:message)
+        context_str = context.empty? ? '' : " #{context.inspect}"
+        "[#{timestamp}] #{severity}: #{message}#{context_str}\n"
       else
         "[#{timestamp}] #{severity}: #{msg}\n"
       end

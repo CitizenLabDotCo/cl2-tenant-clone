@@ -5,11 +5,17 @@ require_relative 'logger_config'
 # Simple logging wrapper with structured context support
 #
 # Usage:
-#   Log.info("Schema dump completed", schema: schema_name, size_bytes: 2048)
-#   Log.warn("Skipped missing file", key: source_key)
-#   Log.error("Operation failed", clone_id: clone_id)
+#   Log.info("Schema dump completed", clone_id: id, size_bytes: 2048)
+#   Log.warn("Skipped missing file: #{key}")
+#   Log.error("Operation failed", clone_id: id)
 #   Log.debug("Processing item", index: i)
-class Log
+#
+# Context guidelines:
+#   - clone_id: Always pass as context (for CloudWatch filtering)
+#   - Counts/sizes/names: Inline in message for readability
+module Log
+  LOGGER = LoggerConfig.setup
+
   class << self
     def debug(message, **context)
       log(:debug, message, context)
@@ -30,11 +36,7 @@ class Log
     private
 
     def log(level, message, context)
-      logger.send(level, context.merge(message: message))
-    end
-
-    def logger
-      $logger ||= LoggerConfig.setup
+      LOGGER.send(level, context.merge(message: message))
     end
   end
 end

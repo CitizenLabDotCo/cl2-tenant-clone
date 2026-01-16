@@ -20,9 +20,9 @@ class S3FilesCopier
     count = 0
     source_prefix = "uploads/#{source_tenant_id}/"
 
-    Log.info('Listing objects in tenant bucket...')
+    Log.debug('Listing objects in tenant bucket...')
     objects = list_objects(@source_bucket, source_prefix)
-    Log.info("Found #{objects.size} objects to copy")
+    Log.debug("Found #{objects.size} objects to copy")
 
     objects.each do |object|
       source_key = object.key
@@ -61,9 +61,9 @@ class S3FilesCopier
     count = 0
     source_prefix = "#{clone_id}/uploads/"
 
-    Log.info('Listing objects in clone bucket...')
+    Log.debug('Listing objects in clone bucket...')
     objects = list_objects(@source_bucket, source_prefix)
-    Log.info("Found #{objects.size} objects to copy")
+    Log.debug("Found #{objects.size} objects to copy")
 
     objects.each do |object|
       source_key = object.key

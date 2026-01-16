@@ -16,7 +16,7 @@ class TenantRestorer
     original_dump = "/tmp/dump-#{clone_id}.sql"
     working_dump = "/tmp/dump-#{clone_id}-transformed.sql"
 
-    Log.info("Starting restore for clone #{clone_id}...", target_host: target_host)
+    Log.info("Starting restore for clone #{clone_id}...", clone_id: clone_id, target_host: target_host)
 
     begin
       # Step 1: Download dump.sql from S3
@@ -27,7 +27,7 @@ class TenantRestorer
 
       source_schema = DatabaseHelpers.host_to_schema(source_tenant['host'])
       target_schema = DatabaseHelpers.host_to_schema(target_host)
-      Log.info("Schema: #{source_schema} -> #{target_schema}")
+      Log.info("Schema: #{source_schema} -> #{target_schema}", clone_id: clone_id)
 
       # Step 3: Copy original dump to working file
       copy_dump(original_dump, working_dump)
@@ -64,18 +64,18 @@ class TenantRestorer
   private
 
   def download_dump_from_s3(clone_id, local_path)
-    Log.info('Downloading SQL dump from S3...')
+    Log.debug('Downloading SQL dump from S3...')
     uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
       region: ENV['AWS_REGION']
     )
     s3_key = "#{clone_id}/dump.sql"
     uploader.download_file(s3_key: s3_key, local_path: local_path)
-    Log.info("✓ SQL dump downloaded (#{File.size(local_path)} bytes)")
+    Log.info("✓ SQL dump downloaded (#{File.size(local_path)} bytes)", clone_id: clone_id)
   end
 
   def download_tenant_json_from_s3(clone_id)
-    Log.info('Downloading tenant metadata from S3...')
+    Log.debug('Downloading tenant metadata from S3...')
     uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
       region: ENV['AWS_REGION']
@@ -85,12 +85,12 @@ class TenantRestorer
     # Download JSON directly into memory
     tenant_json = uploader.download_string(s3_key: s3_key)
 
-    Log.info('✓ Tenant metadata downloaded')
+    Log.info('✓ Tenant metadata downloaded', clone_id: clone_id)
     JSON.parse(tenant_json)
   end
 
   def copy_s3_files_from_clone_bucket(clone_id, target_tenant_id, uuid_mapping)
-    Log.info('Copying S3 files with UUID mapping...')
+    Log.debug('Copying S3 files with UUID mapping...')
     copier = S3FilesCopier.new(
       source_bucket: ENV['AWS_S3_CLONE_BUCKET'],
       dest_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
@@ -101,18 +101,16 @@ class TenantRestorer
       target_tenant_id: target_tenant_id,
       uuid_mapping: uuid_mapping
     )
-    Log.info("✓ Copied #{count} files from S3 with UUID mapping")
+    Log.info("✓ Copied #{count} files from S3 with UUID mapping", clone_id: clone_id)
   end
 
   def copy_dump(source, destination)
     Log.debug('Copying dump to working file...')
     FileUtils.cp(source, destination)
-    Log.debug('✓ Dump copied to working file')
   end
 
   def replace_schema_and_host_in_file(dump_file, source_schema, target_schema, source_host, target_host)
-    Log.info("Replacing schema '#{source_schema}' -> '#{target_schema}'")
-    Log.info("Replacing host '#{source_host}' -> '#{target_host}'")
+    Log.debug("Replacing schema '#{source_schema}' -> '#{target_schema}' and host '#{source_host}' -> '#{target_host}'...")
 
     # Process line by line to avoid loading large files into memory
     temp_file = "#{dump_file}.tmp"
@@ -132,11 +130,10 @@ class TenantRestorer
   end
 
   def generate_uuid_mapping(dump_file)
-    Log.info('Extracting primary key UUIDs...')
+    Log.debug('Extracting primary key UUIDs...')
     uuids = DatabaseHelpers.extract_primary_key_uuids(dump_file)
     Log.info("Found #{uuids.size} unique UUIDs")
 
-    Log.debug('Generating new UUIDs...')
     mapping = {}
     uuids.each { |old_uuid| mapping[old_uuid] = SecureRandom.uuid }
     Log.info("✓ Generated #{mapping.size} UUID mappings")
@@ -145,7 +142,7 @@ class TenantRestorer
   end
 
   def replace_uuids_in_file(dump_file, uuid_mapping)
-    Log.info('Replacing UUIDs in dump...')
+    Log.debug('Replacing UUIDs in dump...')
 
     # Process line by line to avoid loading large files into memory
     temp_file = "#{dump_file}.tmp"
@@ -164,7 +161,7 @@ class TenantRestorer
   end
 
   def restore_dump_to_database(dump_file)
-    Log.info('Restoring dump to database...')
+    Log.debug('Restoring dump to database...')
 
     # Use -q (quiet) to suppress NOTICE messages
     # Redirect stderr to /dev/null to suppress verbose DROP CASCADE and other messages
@@ -178,7 +175,7 @@ class TenantRestorer
   end
 
   def create_tenant_row(source_tenant, target_host, target_name, target_tenant_id)
-    Log.info('Creating tenant row...')
+    Log.debug('Creating tenant row...')
 
     # Start with all source tenant data
     new_tenant = source_tenant.dup
@@ -207,7 +204,7 @@ class TenantRestorer
   end
 
   def delete_clone_folder(clone_id)
-    Log.info('Cleaning up clone folder...')
+    Log.debug('Cleaning up clone folder...')
     uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
       region: ENV['AWS_REGION']
