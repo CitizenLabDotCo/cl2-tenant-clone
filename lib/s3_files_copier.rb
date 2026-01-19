@@ -1,4 +1,5 @@
 require 'aws-sdk-s3'
+require_relative 'log'
 require_relative 'database_helpers'
 require_relative 's3_helpers'
 
@@ -17,9 +18,9 @@ class S3FilesCopier
   def copy_to_clone_bucket(source_tenant_id:, clone_id:)
     source_prefix = "uploads/#{source_tenant_id}/"
 
-    puts "  Listing objects in tenant bucket..."
+    Log.debug('Listing objects in tenant bucket...')
     objects = list_objects(@source_bucket, source_prefix)
-    puts "  Found #{objects.size} objects to copy"
+    Log.debug("Found #{objects.size} objects to copy")
 
     # Build copy tasks (source_key -> dest_key)
     tasks = objects.filter_map do |object|
@@ -41,9 +42,9 @@ class S3FilesCopier
   def copy_from_clone_bucket(clone_id:, target_tenant_id:, uuid_mapping:)
     source_prefix = "#{clone_id}/uploads/"
 
-    puts "  Listing objects in clone bucket..."
+    Log.debug('Listing objects in clone bucket...')
     objects = list_objects(@source_bucket, source_prefix)
-    puts "  Found #{objects.size} objects to copy"
+    Log.debug("Found #{objects.size} objects to copy")
 
     # Build copy tasks (source_key -> dest_key) with UUID transformation
     tasks = objects.filter_map do |object|
@@ -85,10 +86,10 @@ class S3FilesCopier
             @s3_client.copy_object(copy_params)
             count_mutex.synchronize do
               count += 1
-              puts "  Copied #{count} files..." if count % 50 == 0
+              Log.debug("Copied #{count} files...") if count % 50 == 0
             end
           rescue Aws::S3::Errors::NoSuchKey
-            puts "  Skipped missing file: #{task[:source_key]}"
+            Log.warn("Skipped missing file: #{task[:source_key]}")
           end
         end
       end
