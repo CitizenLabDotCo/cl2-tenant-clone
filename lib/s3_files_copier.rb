@@ -4,7 +4,7 @@ require_relative 'database_helpers'
 require_relative 's3_helpers'
 
 class S3FilesCopier
-  THREAD_COUNT = 20
+  THREAD_COUNT = ENV.fetch('AWS_S3_COPY_THREADS', 20).to_i
 
   def initialize(source_bucket:, dest_bucket:, region:)
     @source_bucket = source_bucket
