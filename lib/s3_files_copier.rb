@@ -4,6 +4,8 @@ require_relative 'database_helpers'
 require_relative 's3_helpers'
 
 class S3FilesCopier
+  THREAD_COUNT = ENV.fetch('AWS_S3_COPY_THREADS', 20).to_i
+
   def initialize(source_bucket:, dest_bucket:, region:)
     @source_bucket = source_bucket
     @dest_bucket = dest_bucket
@@ -13,93 +15,89 @@ class S3FilesCopier
   # Dump: Copy tenant files to clone bucket
   # Source: uploads/{source_tenant_id}/**
   # Dest: {clone_id}/uploads/**
-  # TODO: For large numbers of files, consider optimizing with:
-  #   - AWS CLI: aws s3 cp s3://source/prefix s3://dest/prefix --recursive
-  #   - Parallel gem: Parallel.each(objects, in_threads: 10) { ... }
   def copy_to_clone_bucket(source_tenant_id:, clone_id:)
-    count = 0
     source_prefix = "uploads/#{source_tenant_id}/"
 
     Log.debug('Listing objects in tenant bucket...')
     objects = list_objects(@source_bucket, source_prefix)
     Log.debug("Found #{objects.size} objects to copy")
 
-    objects.each do |object|
+    # Build copy tasks (source_key -> dest_key)
+    tasks = objects.filter_map do |object|
       source_key = object.key
+      next if source_key.end_with?('/') # Skip directory markers
 
-      # Skip directory markers (keys ending with /)
-      next if source_key.end_with?('/')
-
-      # Remove tenant prefix: uploads/abc-123/idea_image/... → idea_image/...
       relative_path = source_key.delete_prefix(source_prefix)
       dest_key = "#{clone_id}/uploads/#{relative_path}"
 
-      # S3-to-S3 copy (no download, no ACL for clone bucket)
-      begin
-        @s3_client.copy_object(
-          bucket: @dest_bucket,
-          copy_source: "#{@source_bucket}/#{source_key}",
-          key: dest_key
-        )
-        count += 1
-
-        # Progress indicator every 50 files
-        Log.debug("Copied #{count} files...") if count % 50 == 0
-      rescue Aws::S3::Errors::NoSuchKey
-        # File was deleted between listing and copying, skip it
-        Log.warn("Skipped missing file: #{source_key}")
-      end
+      { source_key: source_key, dest_key: dest_key }
     end
 
-    count
+    copy_objects_in_parallel(tasks)
   end
 
   # Restore: Copy clone files to tenant bucket with UUID mapping
   # Source: {clone_id}/uploads/**
   # Dest: uploads/{target_tenant_id}/**
   def copy_from_clone_bucket(clone_id:, target_tenant_id:, uuid_mapping:)
-    count = 0
     source_prefix = "#{clone_id}/uploads/"
 
     Log.debug('Listing objects in clone bucket...')
     objects = list_objects(@source_bucket, source_prefix)
     Log.debug("Found #{objects.size} objects to copy")
 
-    objects.each do |object|
+    # Build copy tasks (source_key -> dest_key) with UUID transformation
+    tasks = objects.filter_map do |object|
       source_key = object.key
+      next if source_key.end_with?('/') # Skip directory markers
 
-      # Skip directory markers (keys ending with /)
-      next if source_key.end_with?('/')
-
-      # Extract relative path: {clone_id}/uploads/idea_image/... → idea_image/...
       relative_path = source_key.delete_prefix(source_prefix)
-
-      # Replace UUIDs in path
       transformed_path = transform_key_with_uuids(relative_path, uuid_mapping)
       dest_key = "uploads/#{target_tenant_id}/#{transformed_path}"
 
-      # S3-to-S3 copy with ACL for tenant bucket
-      begin
-        @s3_client.copy_object(
-          bucket: @dest_bucket,
-          copy_source: "#{@source_bucket}/#{source_key}",
-          key: dest_key,
-          acl: 'public-read'
-        )
-        count += 1
-
-        # Progress indicator every 50 files
-        Log.debug("Copied #{count} files...") if count % 50 == 0
-      rescue Aws::S3::Errors::NoSuchKey
-        # File was deleted between listing and copying, skip it
-        Log.warn("Skipped missing file: #{source_key}")
-      end
+      { source_key: source_key, dest_key: dest_key, acl: 'public-read' }
     end
 
-    count
+    copy_objects_in_parallel(tasks)
   end
 
   private
+
+  def copy_objects_in_parallel(tasks)
+    return 0 if tasks.empty?
+
+    queue = Queue.new
+    tasks.each { |task| queue << task }
+
+    count = 0
+    count_mutex = Mutex.new
+
+    threads = THREAD_COUNT.times.map do
+      Thread.new do
+        while (task = queue.pop(true) rescue nil)
+          copy_params = {
+            bucket: @dest_bucket,
+            copy_source: "#{@source_bucket}/#{task[:source_key]}",
+            key: task[:dest_key]
+          }
+          copy_params[:acl] = task[:acl] if task[:acl]
+
+          begin
+            @s3_client.copy_object(copy_params)
+            count_mutex.synchronize do
+              count += 1
+              Log.debug("Copied #{count} files...") if count % 50 == 0
+            end
+          rescue Aws::S3::Errors::NoSuchKey
+            Log.warn("Skipped missing file: #{task[:source_key]}")
+          end
+        end
+      end
+    end
+
+    threads.each(&:join)
+    count
+  end
 
   def list_objects(bucket, prefix)
     objects = []
