@@ -21,8 +21,9 @@ RSpec.describe S3FilesCopier, :s3 => true do
     let(:dump_copier) do
       S3FilesCopier.new(
         source_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
-        dest_bucket: ENV['AWS_S3_CLONE_BUCKET'],
-        region: ENV['AWS_REGION']
+        target_bucket: ENV['AWS_S3_CLONE_BUCKET'],
+        source_region: ENV['AWS_REGION'],
+        target_region: ENV['AWS_REGION']
       )
     end
 
@@ -85,8 +86,9 @@ RSpec.describe S3FilesCopier, :s3 => true do
     let(:restore_copier) do
       S3FilesCopier.new(
         source_bucket: ENV['AWS_S3_CLONE_BUCKET'],
-        dest_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
-        region: ENV['AWS_REGION']
+        target_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
+        source_region: ENV['AWS_REGION'],
+        target_region: ENV['AWS_REGION']
       )
     end
 

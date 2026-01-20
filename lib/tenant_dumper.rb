@@ -7,6 +7,8 @@ require_relative 's3_uploader'
 require_relative 's3_files_copier'
 
 class TenantDumper
+  AWS_CLONE_REGION = 'eu-central-1'
+
   def dump(source_host, clone_id: nil)
     validate_source_host!(source_host)
 
@@ -45,11 +47,11 @@ class TenantDumper
 
     Log.info("✓ SQL dump completed (#{File.size(temp_file)} bytes)", clone_id: clone_id)
 
-    # Upload to S3
+    # Upload to S3 (clone bucket is always in eu-central-1)
     Log.debug('Uploading SQL dump to S3...')
     uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
-      region: ENV['AWS_REGION']
+      region: AWS_CLONE_REGION
     )
     uploader.upload_file(local_path: temp_file, s3_key: "#{clone_id}/dump.sql")
     Log.info('✓ SQL dump uploaded to S3', clone_id: clone_id)
@@ -67,12 +69,12 @@ class TenantDumper
 
     Log.info('✓ Tenant data fetched', clone_id: clone_id)
 
-    # Upload directly to S3 (no local file)
+    # Upload directly to S3 (clone bucket is always in eu-central-1)
     Log.debug('Uploading tenant metadata to S3...')
 
     uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
-      region: ENV['AWS_REGION']
+      region: AWS_CLONE_REGION
     )
     uploader.upload_string(content: tenant_json, s3_key: "#{clone_id}/tenant.json")
 
@@ -85,8 +87,9 @@ class TenantDumper
     Log.debug('Copying S3 files to clone bucket...')
     copier = S3FilesCopier.new(
       source_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
-      dest_bucket: ENV['AWS_S3_CLONE_BUCKET'],
-      region: ENV['AWS_REGION']
+      target_bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      source_region: ENV['AWS_REGION'],
+      target_region: AWS_CLONE_REGION
     )
     count = copier.copy_to_clone_bucket(
       source_tenant_id: source_tenant_id,
