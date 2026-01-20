@@ -1,6 +1,6 @@
-require_relative '../database_helpers'
+require 'database_helpers'
 
-RSpec.describe DatabaseHelpers do
+RSpec.describe DatabaseHelpers, :database => true do
   describe '.host_to_schema' do
     it 'converts host to schema name by replacing dots with underscores' do
       expect(DatabaseHelpers.host_to_schema('demo.localhost')).to eq('demo_localhost')
@@ -9,51 +9,40 @@ RSpec.describe DatabaseHelpers do
     end
   end
 
-  describe '.escape_sql' do
-    it 'escapes single quotes for SQL string literals' do
-      expect(DatabaseHelpers.escape_sql("O'Reilly")).to eq("O''Reilly")
-      expect(DatabaseHelpers.escape_sql("It's a test")).to eq("It''s a test")
-      expect(DatabaseHelpers.escape_sql("no quotes")).to eq("no quotes")
+  describe '.host_exists?' do
+    before do
+      # Create a tenant for testing
+      DatabaseHelpers.with_connection do |conn|
+        conn.exec_params(
+          "INSERT INTO public.tenants (id, name, host, created_at, updated_at) VALUES ($1, $2, $3, $4, $5);",
+          [SecureRandom.uuid, 'Test Tenant', 'existing.govocal.com', Time.now, Time.now]
+        )
+      end
     end
 
-    it 'handles multiple single quotes' do
-      expect(DatabaseHelpers.escape_sql("''")).to eq("''''")
+    it 'returns true when host exists in tenants table' do
+      expect(DatabaseHelpers.host_exists?('existing.govocal.com')).to be true
     end
 
-    it 'converts non-string values to strings' do
-      expect(DatabaseHelpers.escape_sql(123)).to eq("123")
-      expect(DatabaseHelpers.escape_sql(true)).to eq("true")
+    it 'returns false when host does not exist' do
+      expect(DatabaseHelpers.host_exists?('nonexistent.govocal.com')).to be false
     end
   end
 
-  describe '.quote_value' do
-    it 'returns NULL for nil values' do
-      expect(DatabaseHelpers.quote_value(nil)).to eq('NULL')
+  describe '.schema_exists?' do
+    before do
+      # Create a test schema
+      DatabaseHelpers.with_connection do |conn|
+        conn.exec("CREATE SCHEMA IF NOT EXISTS test_schema_exists;")
+      end
     end
 
-    it 'quotes and escapes string values' do
-      expect(DatabaseHelpers.quote_value('hello')).to eq("'hello'")
-      expect(DatabaseHelpers.quote_value("O'Reilly")).to eq("'O''Reilly'")
+    it 'returns true when schema exists' do
+      expect(DatabaseHelpers.schema_exists?('test_schema_exists')).to be true
     end
 
-    it 'converts hashes to JSON and quotes them' do
-      result = DatabaseHelpers.quote_value({ foo: 'bar' })
-      expect(result).to eq("'{\"foo\":\"bar\"}'")
-    end
-
-    it 'converts arrays to JSON and quotes them' do
-      result = DatabaseHelpers.quote_value(['a', 'b'])
-      expect(result).to eq("'[\"a\",\"b\"]'")
-    end
-
-    it 'escapes single quotes in JSON values' do
-      result = DatabaseHelpers.quote_value({ name: "O'Reilly" })
-      expect(result).to eq("'{\"name\":\"O''Reilly\"}'")
-    end
-
-    it 'converts other types to strings and quotes them' do
-      expect(DatabaseHelpers.quote_value(123)).to eq("'123'")
-      expect(DatabaseHelpers.quote_value(true)).to eq("'true'")
+    it 'returns false when schema does not exist' do
+      expect(DatabaseHelpers.schema_exists?('nonexistent_schema')).to be false
     end
   end
 end

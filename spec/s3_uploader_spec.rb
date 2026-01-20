@@ -1,4 +1,4 @@
-require_relative '../s3_uploader'
+require 's3_uploader'
 
 RSpec.describe S3Uploader, :s3 => true do
   let(:uploader) do

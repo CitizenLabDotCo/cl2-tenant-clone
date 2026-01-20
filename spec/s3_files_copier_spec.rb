@@ -1,5 +1,5 @@
-require_relative '../s3_files_copier'
-require_relative '../s3_uploader'
+require 's3_files_copier'
+require 's3_uploader'
 
 RSpec.describe S3FilesCopier, :s3 => true do
   let(:clone_bucket_uploader) do
@@ -77,6 +77,7 @@ RSpec.describe S3FilesCopier, :s3 => true do
         )
       end.to raise_error(Aws::S3::Errors::NoSuchKey)
     end
+
   end
 
   describe '#copy_from_clone_bucket' do
