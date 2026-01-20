@@ -143,3 +143,108 @@ workflows:
           filters:
             branches:
               only: master
+      - push-deployment-docker-image:
+          name: Push production image
+          context:
+            - docker-hub-access
+          requires:
+            - test
+          filters:
+            branches:
+              only: production
+      - deploy-to-swarm:
+          name: Deploy to production-frankfurt
+          ssh_host: DEPLOY_HOST_FRANKFURT
+          cluster_name: production-frankfurt
+          compose_file: docker-compose-production.yml
+          context:
+            - docker-hub-access
+          requires:
+            - Push production image
+          filters:
+            branches:
+              only: production
+      - deploy-to-swarm:
+          name: Deploy to production-can
+          ssh_host: DEPLOY_HOST_CAN
+          cluster_name: production-can
+          compose_file: docker-compose-production.yml
+          context:
+            - docker-hub-access
+          requires:
+            - Push production image
+          filters:
+            branches:
+              only: production
+      - deploy-to-swarm:
+          name: Deploy to production-paris
+          ssh_host: DEPLOY_HOST_PARIS
+          cluster_name: production-paris
+          compose_file: docker-compose-production.yml
+          context:
+            - docker-hub-access
+          requires:
+            - Push production image
+          filters:
+            branches:
+              only: production
+      - deploy-to-swarm:
+          name: Deploy to production-sam
+          ssh_host: DEPLOY_HOST_SAM
+          cluster_name: production-sam
+          compose_file: docker-compose-production.yml
+          context:
+            - docker-hub-access
+          requires:
+            - Push production image
+          filters:
+            branches:
+              only: production
+      - deploy-to-swarm:
+          name: Deploy to production-stockholm
+          ssh_host: DEPLOY_HOST_STOCKHOLM
+          cluster_name: production-stockholm
+          compose_file: docker-compose-production.yml
+          context:
+            - docker-hub-access
+          requires:
+            - Push production image
+          filters:
+            branches:
+              only: production
+      - deploy-to-swarm:
+          name: Deploy to production-uk
+          ssh_host: DEPLOY_HOST_UK
+          cluster_name: production-uk
+          compose_file: docker-compose-production.yml
+          context:
+            - docker-hub-access
+          requires:
+            - Push production image
+          filters:
+            branches:
+              only: production
+      - deploy-to-swarm:
+          name: Deploy to production-usw
+          ssh_host: DEPLOY_HOST_USW
+          cluster_name: production-usw
+          compose_file: docker-compose-production.yml
+          context:
+            - docker-hub-access
+          requires:
+            - Push production image
+          filters:
+            branches:
+              only: production
+      - deploy-to-swarm:
+          name: Deploy to production-aus
+          ssh_host: DEPLOY_HOST_AUS
+          cluster_name: production-aus
+          compose_file: docker-compose-production.yml
+          context:
+            - docker-hub-access
+          requires:
+            - Push production image
+          filters:
+            branches:
+              only: production
