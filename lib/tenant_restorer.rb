@@ -9,6 +9,8 @@ require_relative 's3_files_copier'
 require_relative 'error_reporter'
 
 class TenantRestorer
+  AWS_CLONE_REGION = 'eu-central-1'
+
   def restore(clone_id, target_host, target_name)
     # Validate target host before starting restore
     validate_target_host!(target_host)
@@ -67,7 +69,7 @@ class TenantRestorer
     Log.debug('Downloading SQL dump from S3...')
     uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
-      region: ENV['AWS_REGION']
+      region: AWS_CLONE_REGION
     )
     s3_key = "#{clone_id}/dump.sql"
     uploader.download_file(s3_key: s3_key, local_path: local_path)
@@ -78,7 +80,7 @@ class TenantRestorer
     Log.debug('Downloading tenant metadata from S3...')
     uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
-      region: ENV['AWS_REGION']
+      region: AWS_CLONE_REGION
     )
     s3_key = "#{clone_id}/tenant.json"
 
@@ -94,7 +96,8 @@ class TenantRestorer
     copier = S3FilesCopier.new(
       source_bucket: ENV['AWS_S3_CLONE_BUCKET'],
       dest_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
-      region: ENV['AWS_REGION']
+      source_region: AWS_CLONE_REGION,
+      target_region: ENV['AWS_REGION']
     )
     count = copier.copy_from_clone_bucket(
       clone_id: clone_id,
@@ -207,7 +210,7 @@ class TenantRestorer
     Log.debug('Cleaning up clone folder...')
     uploader = S3Uploader.new(
       bucket: ENV['AWS_S3_CLONE_BUCKET'],
-      region: ENV['AWS_REGION']
+      region: AWS_CLONE_REGION
     )
     count = uploader.delete_prefix(prefix: "#{clone_id}/")
     Log.info("✓ Deleted #{count} objects from clone bucket")
