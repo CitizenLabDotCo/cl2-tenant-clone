@@ -92,6 +92,9 @@ jobs:
         type: string
       compose_file:
         type: string
+      stack_name:
+        type: string
+        default: cl2
     steps:
       - run:
           name: Deploy to << parameters.cluster_name >>
@@ -101,13 +104,13 @@ jobs:
               echo "Pulling latest image..."
               docker pull citizenlabdotco/cl2-tenant-clone:$CIRCLE_BRANCH
 
-              echo "Deploying cl2 stack with updated cl2-tenant-clone service..."
+              echo "Deploying << parameters.stack_name >> stack with updated cl2-tenant-clone service..."
               cd cl2-deployment
               docker stack deploy \
                 --compose-file << parameters.compose_file >> \
                 --with-registry-auth \
                 --prune \
-                cl2
+                << parameters.stack_name >>
 
               echo "Deployment complete!"
             EOF
@@ -157,6 +160,7 @@ workflows:
           ssh_host: DEPLOY_HOST_FRANKFURT
           cluster_name: production-frankfurt
           compose_file: docker-compose-production.yml
+          stack_name: cl2-prd-bnlx-stack
           context:
             - docker-hub-access
           requires:
