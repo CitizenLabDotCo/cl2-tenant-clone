@@ -6,11 +6,11 @@ require_relative 's3_helpers'
 class S3FilesCopier
   THREAD_COUNT = ENV.fetch('AWS_S3_COPY_THREADS', 20).to_i
 
-  def initialize(source_bucket:, dest_bucket:, source_region:, target_region:)
+  def initialize(source_bucket:, target_bucket:, source_region:, target_region:)
     @source_bucket = source_bucket
-    @dest_bucket = dest_bucket
+    @target_bucket = target_bucket
     @source_client = S3Helpers.create_client(region: source_region)
-    @dest_client = S3Helpers.create_client(region: target_region)
+    @target_client = S3Helpers.create_client(region: target_region)
   end
 
   # Dump: Copy tenant files to clone bucket
@@ -77,14 +77,14 @@ class S3FilesCopier
       Thread.new do
         while (task = queue.pop(true) rescue nil)
           copy_params = {
-            bucket: @dest_bucket,
+            bucket: @target_bucket,
             copy_source: "#{@source_bucket}/#{task[:source_key]}",
             key: task[:dest_key]
           }
           copy_params[:acl] = task[:acl] if task[:acl]
 
           begin
-            @dest_client.copy_object(copy_params)
+            @target_client.copy_object(copy_params)
             count_mutex.synchronize do
               count += 1
               Log.debug("Copied #{count} files...") if count % 50 == 0

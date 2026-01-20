@@ -87,7 +87,7 @@ class TenantDumper
     Log.debug('Copying S3 files to clone bucket...')
     copier = S3FilesCopier.new(
       source_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
-      dest_bucket: ENV['AWS_S3_CLONE_BUCKET'],
+      target_bucket: ENV['AWS_S3_CLONE_BUCKET'],
       source_region: ENV['AWS_REGION'],
       target_region: AWS_CLONE_REGION
     )

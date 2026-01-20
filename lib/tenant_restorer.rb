@@ -95,7 +95,7 @@ class TenantRestorer
     Log.debug('Copying S3 files with UUID mapping...')
     copier = S3FilesCopier.new(
       source_bucket: ENV['AWS_S3_CLONE_BUCKET'],
-      dest_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
+      target_bucket: ENV['AWS_S3_CLUSTER_BUCKET'],
       source_region: AWS_CLONE_REGION,
       target_region: ENV['AWS_REGION']
     )
