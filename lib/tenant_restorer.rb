@@ -11,37 +11,47 @@ require_relative 'error_reporter'
 class TenantRestorer
   AWS_CLONE_REGION = 'eu-central-1'
 
-  # Sensitive settings that should be cleared when cloning a tenant
-  # to prevent data leakage and misconfiguration
-  SETTINGS_TO_CLEAR = [
-    %w[core weglot_api_key],
-    %w[core google_search_console_meta_attribute],
-    %w[typeform_surveys user_token],
-    %w[google_analytics tracking_id],
-    %w[satismeter write_key],
-    %w[facebook_login app_id],
-    %w[facebook_login app_secret],
-    %w[google_login client_id],
-    %w[google_login client_secret],
-    %w[azure_ad_login tenant],
-    %w[azure_ad_login client_id],
-    %w[azure_ad_b2c_login tenant_name],
-    %w[azure_ad_b2c_login tenant_id],
-    %w[azure_ad_b2c_login policy_name],
-    %w[azure_ad_b2c_login client_id],
-    %w[integration_onze_stad_app app_id],
-    %w[integration_onze_stad_app api_key],
-    %w[esri_integration api_key],
-    %w[verification verification_methods]
-  ].freeze
-
-  # Features where clearing settings requires disabling the feature
-  # (because the cleared settings are in the feature's required-settings)
-  FEATURES_TO_DISABLE = %w[
-    google_analytics
-    satismeter
-    integration_onze_stad_app
-  ].freeze
+  # Sensitive settings that should be cleared when cloning a tenant.
+  # Set `disable: true` for features where the cleared keys are in the
+  # feature's `required-settings` (to keep settings valid after clearing).
+  SENSITIVE_SETTINGS = {
+    'core' => {
+      keys: %w[weglot_api_key google_search_console_meta_attribute]
+    },
+    'typeform_surveys' => {
+      keys: %w[user_token]
+    },
+    'google_analytics' => {
+      keys: %w[tracking_id],
+      disable: true
+    },
+    'satismeter' => {
+      keys: %w[write_key],
+      disable: true
+    },
+    'facebook_login' => {
+      keys: %w[app_id app_secret]
+    },
+    'google_login' => {
+      keys: %w[client_id client_secret]
+    },
+    'azure_ad_login' => {
+      keys: %w[tenant client_id]
+    },
+    'azure_ad_b2c_login' => {
+      keys: %w[tenant_name tenant_id policy_name client_id]
+    },
+    'integration_onze_stad_app' => {
+      keys: %w[app_id api_key],
+      disable: true
+    },
+    'esri_integration' => {
+      keys: %w[api_key]
+    },
+    'verification' => {
+      keys: %w[verification_methods]
+    }
+  }.freeze
 
   def restore(clone_id, target_host, target_name)
     # Validate target host before starting restore
@@ -244,22 +254,15 @@ class TenantRestorer
   def clear_sensitive_settings(settings)
     return settings unless settings.is_a?(Hash)
 
-    SETTINGS_TO_CLEAR.each do |path|
-      clear_nested_setting(settings, path)
-    end
+    SENSITIVE_SETTINGS.each do |feature, config|
+      feature_settings = settings[feature]
+      next unless feature_settings.is_a?(Hash)
 
-    # Disable features that require the cleared settings
-    FEATURES_TO_DISABLE.each do |feature|
-      settings[feature]&.[]=('enabled', false)
+      config[:keys].each { |key| feature_settings.delete(key) }
+      feature_settings['enabled'] = false if config[:disable]
     end
 
     settings
-  end
-
-  def clear_nested_setting(hash, path)
-    *parent_keys, final_key = path
-    target = parent_keys.empty? ? hash : hash.dig(*parent_keys)
-    target&.delete(final_key)
   end
 
   def delete_clone_folder(clone_id)
