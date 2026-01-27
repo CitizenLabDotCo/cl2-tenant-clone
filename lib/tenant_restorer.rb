@@ -11,6 +11,38 @@ require_relative 'error_reporter'
 class TenantRestorer
   AWS_CLONE_REGION = 'eu-central-1'
 
+  # Sensitive settings that should be cleared when cloning a tenant
+  # to prevent data leakage and misconfiguration
+  SETTINGS_TO_CLEAR = [
+    %w[core weglot_api_key],
+    %w[core google_search_console_meta_attribute],
+    %w[typeform_surveys user_token],
+    %w[google_analytics tracking_id],
+    %w[satismeter write_key],
+    %w[facebook_login app_id],
+    %w[facebook_login app_secret],
+    %w[google_login client_id],
+    %w[google_login client_secret],
+    %w[azure_ad_login tenant],
+    %w[azure_ad_login client_id],
+    %w[azure_ad_b2c_login tenant_name],
+    %w[azure_ad_b2c_login tenant_id],
+    %w[azure_ad_b2c_login policy_name],
+    %w[azure_ad_b2c_login client_id],
+    %w[integration_onze_stad_app app_id],
+    %w[integration_onze_stad_app api_key],
+    %w[esri_integration api_key],
+    %w[verification verification_methods]
+  ].freeze
+
+  # Features where clearing settings requires disabling the feature
+  # (because the cleared settings are in the feature's required-settings)
+  FEATURES_TO_DISABLE = %w[
+    google_analytics
+    satismeter
+    integration_onze_stad_app
+  ].freeze
+
   def restore(clone_id, target_host, target_name)
     # Validate target host before starting restore
     validate_target_host!(target_host)
@@ -194,6 +226,9 @@ class TenantRestorer
     # to cl2-tenant-setup service in the future.
     new_tenant['creation_finalized_at'] = now
 
+    # Clear sensitive settings that shouldn't be copied
+    clear_sensitive_settings(new_tenant['settings'])
+
     DatabaseHelpers.with_connection do |conn|
       # Build parameterized INSERT dynamically
       columns = new_tenant.keys
@@ -204,6 +239,27 @@ class TenantRestorer
     end
 
     Log.info("✓ Tenant row created: #{new_tenant['name']} (#{target_host})")
+  end
+
+  def clear_sensitive_settings(settings)
+    return settings unless settings.is_a?(Hash)
+
+    SETTINGS_TO_CLEAR.each do |path|
+      clear_nested_setting(settings, path)
+    end
+
+    # Disable features that require the cleared settings
+    FEATURES_TO_DISABLE.each do |feature|
+      settings[feature]&.[]=('enabled', false)
+    end
+
+    settings
+  end
+
+  def clear_nested_setting(hash, path)
+    *parent_keys, final_key = path
+    target = parent_keys.empty? ? hash : hash.dig(*parent_keys)
+    target&.delete(final_key)
   end
 
   def delete_clone_folder(clone_id)
