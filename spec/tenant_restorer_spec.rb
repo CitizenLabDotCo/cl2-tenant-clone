@@ -230,6 +230,79 @@ RSpec.describe TenantRestorer do
     end
   end
 
+  describe '#validate_and_clean_app_configuration', :database => true do
+    let(:schema_name) { 'test_app_config_schema' }
+
+    before do
+      DatabaseHelpers.with_connection do |conn|
+        conn.exec("CREATE SCHEMA IF NOT EXISTS #{schema_name};")
+        conn.exec(<<~SQL)
+          CREATE TABLE IF NOT EXISTS #{schema_name}.app_configurations (
+            id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+            name character varying,
+            host character varying,
+            settings jsonb DEFAULT '{}'::jsonb,
+            created_at timestamp(6) NOT NULL DEFAULT now(),
+            updated_at timestamp(6) NOT NULL DEFAULT now()
+          );
+        SQL
+      end
+    end
+
+    after do
+      DatabaseHelpers.with_connection do |conn|
+        conn.exec("DROP SCHEMA IF EXISTS #{schema_name} CASCADE;")
+      end
+    end
+
+    it 'raises an error when no app_configurations row exists' do
+      expect {
+        restorer.send(:validate_and_clean_app_configuration, schema_name)
+      }.to raise_error(RuntimeError, /No app_configurations row found in schema '#{schema_name}'/)
+    end
+
+    it 'clears sensitive settings in the app_configurations row' do
+      settings = {
+        'core' => { 'weglot_api_key' => 'secret-key', 'timezone' => 'UTC' },
+        'google_analytics' => { 'tracking_id' => 'UA-12345', 'enabled' => true },
+        'facebook_login' => { 'app_id' => 'fb-id', 'app_secret' => 'fb-secret', 'enabled' => true },
+        'other_feature' => { 'some_key' => 'keep-me', 'enabled' => true }
+      }
+
+      DatabaseHelpers.with_connection do |conn|
+        conn.exec_params(
+          "INSERT INTO #{schema_name}.app_configurations (name, host, settings) VALUES ($1, $2, $3);",
+          ['Test', 'test.govocal.com', JSON.generate(settings)]
+        )
+      end
+
+      restorer.send(:validate_and_clean_app_configuration, schema_name)
+
+      # Read back the updated settings
+      updated_settings = DatabaseHelpers.with_connection do |conn|
+        result = conn.exec("SELECT settings FROM #{schema_name}.app_configurations LIMIT 1;")
+        JSON.parse(result[0]['settings'])
+      end
+
+      # Sensitive keys should be cleared
+      expect(updated_settings['core']).not_to have_key('weglot_api_key')
+      expect(updated_settings['core']['timezone']).to eq('UTC')
+
+      # Google Analytics should be cleared AND disabled
+      expect(updated_settings['google_analytics']).not_to have_key('tracking_id')
+      expect(updated_settings['google_analytics']['enabled']).to eq(false)
+
+      # Facebook login keys should be cleared
+      expect(updated_settings['facebook_login']).not_to have_key('app_id')
+      expect(updated_settings['facebook_login']).not_to have_key('app_secret')
+      expect(updated_settings['facebook_login']['enabled']).to eq(true)
+
+      # Other features should be untouched
+      expect(updated_settings['other_feature']['some_key']).to eq('keep-me')
+      expect(updated_settings['other_feature']['enabled']).to eq(true)
+    end
+  end
+
   describe '#restore', :database => true do
     let(:clone_id) { 'test-clone-123' }
     let(:target_name) { 'Tenant Clone' }

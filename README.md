@@ -74,7 +74,7 @@ curl -u guest:guest -X POST http://localhost:8088/api/exchanges/%2F/cl2back/publ
       "app_id": "admin-hq"
     },
     "routing_key": "tenant_clone.restore_requested",
-    "payload": "{\"source_cluster\":\"local\",\"target_cluster\":\"local\",\"clone_id\":\"test-123\",\"source_host\":\"localhost.govocal.com\",\"target_host\":\"clone.govocal.com\"}",
+    "payload": "{\"source_cluster\":\"local\",\"target_cluster\":\"local\",\"clone_id\":\"test-123\",\"source_host\":\"localhost.govocal.com\",\"target_host\":\"clone.govocal.com\",\"target_name\":\"Clone name\"}",
     "payload_encoding": "string"
   }'
 ```
