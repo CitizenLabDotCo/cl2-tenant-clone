@@ -147,6 +147,162 @@ RSpec.describe TenantRestorer do
     end
   end
 
+  describe '#clear_sensitive_settings' do
+    it 'clears specified sensitive settings while preserving others' do
+      settings = {
+        'core' => {
+          'weglot_api_key' => 'wg-api-key',
+          'google_search_console_meta_attribute' => 'verification-token',
+          'timezone' => 'UTC'
+        },
+        'typeform_surveys' => { 'user_token' => 'secret-token', 'enabled' => true, 'allowed' => true },
+        'google_analytics' => { 'tracking_id' => 'UA-12345', 'enabled' => true, 'allowed' => true },
+        'satismeter' => { 'write_key' => 'sm-key-123', 'enabled' => true, 'allowed' => true },
+        'facebook_login' => { 'app_id' => 'fb-app-id', 'app_secret' => 'fb-secret', 'enabled' => true },
+        'google_login' => { 'client_id' => 'google-client', 'client_secret' => 'google-secret', 'enabled' => true },
+        'azure_ad_login' => { 'tenant' => 'azure-tenant', 'client_id' => 'azure-client', 'enabled' => true },
+        'azure_ad_b2c_login' => {
+          'tenant_name' => 'b2c-tenant',
+          'tenant_id' => 'b2c-tenant-id',
+          'policy_name' => 'b2c-policy',
+          'client_id' => 'b2c-client',
+          'enabled' => true
+        },
+        'integration_onze_stad_app' => { 'app_id' => 'onze-app', 'api_key' => 'onze-key', 'enabled' => true },
+        'verification' => { 'verification_methods' => [{ 'name' => 'id_card' }], 'enabled' => true },
+        'other_feature' => { 'api_key' => 'should-keep', 'enabled' => true }
+        # Note: esri_integration is intentionally missing to test robustness
+      }
+
+      result = restorer.send(:clear_sensitive_settings, settings)
+
+      # Core settings should be cleared
+      expect(result['core']).not_to have_key('weglot_api_key')
+      expect(result['core']).not_to have_key('google_search_console_meta_attribute')
+      expect(result['core']['timezone']).to eq('UTC')
+
+      # Typeform settings should be cleared but enabled remains true (no required-settings constraint)
+      expect(result['typeform_surveys']).not_to have_key('user_token')
+      expect(result['typeform_surveys']['enabled']).to eq(true)
+
+      # Google Analytics should be cleared AND disabled (tracking_id is required-settings)
+      expect(result['google_analytics']).not_to have_key('tracking_id')
+      expect(result['google_analytics']['enabled']).to eq(false)
+
+      # Satismeter should be cleared AND disabled (write_key is required-settings)
+      expect(result['satismeter']).not_to have_key('write_key')
+      expect(result['satismeter']['enabled']).to eq(false)
+
+      # Facebook login should be cleared but enabled remains true
+      expect(result['facebook_login']).not_to have_key('app_id')
+      expect(result['facebook_login']).not_to have_key('app_secret')
+      expect(result['facebook_login']['enabled']).to eq(true)
+
+      # Google login should be cleared but enabled remains true
+      expect(result['google_login']).not_to have_key('client_id')
+      expect(result['google_login']).not_to have_key('client_secret')
+      expect(result['google_login']['enabled']).to eq(true)
+
+      # Azure AD login should be cleared but enabled remains true
+      expect(result['azure_ad_login']).not_to have_key('tenant')
+      expect(result['azure_ad_login']).not_to have_key('client_id')
+      expect(result['azure_ad_login']['enabled']).to eq(true)
+
+      # Azure AD B2C login should be cleared but enabled remains true
+      expect(result['azure_ad_b2c_login']).not_to have_key('tenant_name')
+      expect(result['azure_ad_b2c_login']).not_to have_key('tenant_id')
+      expect(result['azure_ad_b2c_login']).not_to have_key('policy_name')
+      expect(result['azure_ad_b2c_login']).not_to have_key('client_id')
+      expect(result['azure_ad_b2c_login']['enabled']).to eq(true)
+
+      # Integration Onze Stad App should be cleared AND disabled (app_id, api_key are required-settings)
+      expect(result['integration_onze_stad_app']).not_to have_key('app_id')
+      expect(result['integration_onze_stad_app']).not_to have_key('api_key')
+      expect(result['integration_onze_stad_app']['enabled']).to eq(false)
+
+      # Verification methods should be cleared but enabled remains true
+      expect(result['verification']).not_to have_key('verification_methods')
+      expect(result['verification']['enabled']).to eq(true)
+
+      # Other features should be completely untouched
+      expect(result['other_feature']['api_key']).to eq('should-keep')
+      expect(result['other_feature']['enabled']).to eq(true)
+    end
+  end
+
+  describe '#validate_and_clean_app_configuration', :database => true do
+    let(:schema_name) { 'test_app_config_schema' }
+
+    before do
+      DatabaseHelpers.with_connection do |conn|
+        conn.exec("CREATE SCHEMA IF NOT EXISTS #{schema_name};")
+        conn.exec(<<~SQL)
+          CREATE TABLE IF NOT EXISTS #{schema_name}.app_configurations (
+            id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+            name character varying,
+            host character varying,
+            settings jsonb DEFAULT '{}'::jsonb,
+            created_at timestamp(6) NOT NULL DEFAULT now(),
+            updated_at timestamp(6) NOT NULL DEFAULT now()
+          );
+        SQL
+      end
+    end
+
+    after do
+      DatabaseHelpers.with_connection do |conn|
+        conn.exec("DROP SCHEMA IF EXISTS #{schema_name} CASCADE;")
+      end
+    end
+
+    it 'raises an error when no app_configurations row exists' do
+      expect {
+        restorer.send(:validate_and_clean_app_configuration, schema_name)
+      }.to raise_error(RuntimeError, /No app_configurations row found in schema '#{schema_name}'/)
+    end
+
+    it 'clears sensitive settings in the app_configurations row' do
+      settings = {
+        'core' => { 'weglot_api_key' => 'secret-key', 'timezone' => 'UTC' },
+        'google_analytics' => { 'tracking_id' => 'UA-12345', 'enabled' => true },
+        'facebook_login' => { 'app_id' => 'fb-id', 'app_secret' => 'fb-secret', 'enabled' => true },
+        'other_feature' => { 'some_key' => 'keep-me', 'enabled' => true }
+      }
+
+      DatabaseHelpers.with_connection do |conn|
+        conn.exec_params(
+          "INSERT INTO #{schema_name}.app_configurations (name, host, settings) VALUES ($1, $2, $3);",
+          ['Test', 'test.govocal.com', JSON.generate(settings)]
+        )
+      end
+
+      restorer.send(:validate_and_clean_app_configuration, schema_name)
+
+      # Read back the updated settings
+      updated_settings = DatabaseHelpers.with_connection do |conn|
+        result = conn.exec("SELECT settings FROM #{schema_name}.app_configurations LIMIT 1;")
+        JSON.parse(result[0]['settings'])
+      end
+
+      # Sensitive keys should be cleared
+      expect(updated_settings['core']).not_to have_key('weglot_api_key')
+      expect(updated_settings['core']['timezone']).to eq('UTC')
+
+      # Google Analytics should be cleared AND disabled
+      expect(updated_settings['google_analytics']).not_to have_key('tracking_id')
+      expect(updated_settings['google_analytics']['enabled']).to eq(false)
+
+      # Facebook login keys should be cleared
+      expect(updated_settings['facebook_login']).not_to have_key('app_id')
+      expect(updated_settings['facebook_login']).not_to have_key('app_secret')
+      expect(updated_settings['facebook_login']['enabled']).to eq(true)
+
+      # Other features should be untouched
+      expect(updated_settings['other_feature']['some_key']).to eq('keep-me')
+      expect(updated_settings['other_feature']['enabled']).to eq(true)
+    end
+  end
+
   describe '#restore', :database => true do
     let(:clone_id) { 'test-clone-123' }
     let(:target_name) { 'Tenant Clone' }

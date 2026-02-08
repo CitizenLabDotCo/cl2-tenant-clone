@@ -11,6 +11,48 @@ require_relative 'error_reporter'
 class TenantRestorer
   AWS_CLONE_REGION = 'eu-central-1'
 
+  # Sensitive settings that should be cleared when cloning a tenant.
+  # Set `disable: true` for features where the cleared keys are in the
+  # feature's `required-settings` (to keep settings valid after clearing).
+  SENSITIVE_SETTINGS = {
+    'core' => {
+      keys: %w[weglot_api_key google_search_console_meta_attribute]
+    },
+    'typeform_surveys' => {
+      keys: %w[user_token]
+    },
+    'google_analytics' => {
+      keys: %w[tracking_id],
+      disable: true
+    },
+    'satismeter' => {
+      keys: %w[write_key],
+      disable: true
+    },
+    'facebook_login' => {
+      keys: %w[app_id app_secret]
+    },
+      'google_login' => {
+      keys: %w[client_id client_secret]
+    },
+    'azure_ad_login' => {
+      keys: %w[tenant client_id]
+    },
+    'azure_ad_b2c_login' => {
+      keys: %w[tenant_name tenant_id policy_name client_id]
+    },
+    'integration_onze_stad_app' => {
+      keys: %w[app_id api_key],
+      disable: true
+    },
+    'esri_integration' => {
+      keys: %w[api_key]
+    },
+    'verification' => {
+      keys: %w[verification_methods]
+    }
+  }.freeze
+
   def restore(clone_id, target_host, target_name)
     # Validate target host before starting restore
     validate_target_host!(target_host)
@@ -46,10 +88,13 @@ class TenantRestorer
       # Step 6: Restore dump to database
       restore_dump_to_database(working_dump)
 
-      # Step 7: Create tenant row (using clone_id as the new tenant ID)
+      # Step 7: Validate app_configuration exists and clear its sensitive settings
+      validate_and_clean_app_configuration(target_schema)
+
+      # Step 8: Create tenant row (using clone_id as the new tenant ID)
       create_tenant_row(source_tenant, target_host, target_name, clone_id)
 
-      # Step 8: Copy S3 files from clone bucket to tenant bucket
+      # Step 9: Copy S3 files from clone bucket to tenant bucket
       copy_s3_files_from_clone_bucket(clone_id, clone_id, uuid_mapping)
 
       Log.info('✓ Restore completed', clone_id: clone_id)
@@ -177,6 +222,31 @@ class TenantRestorer
     Log.info('✓ Dump restored to database')
   end
 
+  def validate_and_clean_app_configuration(target_schema)
+    Log.debug('Validating app_configuration in imported schema...')
+
+    DatabaseHelpers.with_connection do |conn|
+      result = conn.exec_params(
+        "SELECT id, settings FROM #{conn.escape_identifier(target_schema)}.app_configurations LIMIT 1;"
+      )
+
+      if result.ntuples == 0
+        raise "No app_configurations row found in schema '#{target_schema}'. The imported dump may be corrupt."
+      end
+
+      row = result[0]
+      settings = JSON.parse(row['settings'] || '{}')
+      clear_sensitive_settings(settings)
+
+      conn.exec_params(
+        "UPDATE #{conn.escape_identifier(target_schema)}.app_configurations SET settings = $1::jsonb WHERE id = $2;",
+        [JSON.generate(settings), row['id']]
+      )
+    end
+
+    Log.info('✓ App configuration validated and sensitive settings cleared')
+  end
+
   def create_tenant_row(source_tenant, target_host, target_name, target_tenant_id)
     Log.debug('Creating tenant row...')
 
@@ -187,6 +257,7 @@ class TenantRestorer
     new_tenant['id'] = target_tenant_id
     new_tenant['name'] = target_name
     new_tenant['host'] = target_host
+    new_tenant['settings'] = '{}' # Settings are always taken from app config, not the tenant row.
     now = Time.now.utc.iso8601
     new_tenant['created_at'] = now
     new_tenant['updated_at'] = now
@@ -197,13 +268,30 @@ class TenantRestorer
     DatabaseHelpers.with_connection do |conn|
       # Build parameterized INSERT dynamically
       columns = new_tenant.keys
-      placeholders = (1..columns.size).map { |i| "$#{i}" }.join(', ')
+      jsonb_columns = %w[settings]
+      placeholders = columns.each_with_index.map do |col, i|
+        jsonb_columns.include?(col) ? "$#{i + 1}::jsonb" : "$#{i + 1}"
+      end.join(', ')
       sql = "INSERT INTO public.tenants (#{columns.join(', ')}) VALUES (#{placeholders});"
 
       conn.exec_params(sql, new_tenant.values)
     end
 
     Log.info("✓ Tenant row created: #{new_tenant['name']} (#{target_host})")
+  end
+
+  def clear_sensitive_settings(settings)
+    return settings unless settings.is_a?(Hash)
+
+    SENSITIVE_SETTINGS.each do |feature, config|
+      feature_settings = settings[feature]
+      next unless feature_settings.is_a?(Hash)
+
+      config[:keys].each { |key| feature_settings.delete(key) }
+      feature_settings['enabled'] = false if config[:disable]
+    end
+
+    settings
   end
 
   def delete_clone_folder(clone_id)
