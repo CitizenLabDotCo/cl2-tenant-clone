@@ -88,8 +88,8 @@ class TenantRestorer
       # Step 6: Restore dump to database
       restore_dump_to_database(working_dump)
 
-      # Step 7: Validate app_configuration exists and clear its sensitive settings
-      validate_and_clean_app_configuration(target_schema)
+      # Step 7: Validate app_configuration exists, update name, and clear sensitive settings
+      validate_and_clean_app_configuration(target_schema, target_name)
 
       # Step 8: Create tenant row (using clone_id as the new tenant ID)
       create_tenant_row(source_tenant, target_host, target_name, clone_id)
@@ -222,7 +222,7 @@ class TenantRestorer
     Log.info('✓ Dump restored to database')
   end
 
-  def validate_and_clean_app_configuration(target_schema)
+  def validate_and_clean_app_configuration(target_schema, target_name)
     Log.debug('Validating app_configuration in imported schema...')
 
     DatabaseHelpers.with_connection do |conn|
@@ -238,9 +238,10 @@ class TenantRestorer
       settings = JSON.parse(row['settings'] || '{}')
       clear_sensitive_settings(settings)
 
+      schema_id = conn.escape_identifier(target_schema)
       conn.exec_params(
-        "UPDATE #{conn.escape_identifier(target_schema)}.app_configurations SET settings = $1::jsonb WHERE id = $2;",
-        [JSON.generate(settings), row['id']]
+        "UPDATE #{schema_id}.app_configurations SET name = $1, settings = $2::jsonb WHERE id = $3;",
+        [target_name, JSON.generate(settings), row['id']]
       )
     end
 
