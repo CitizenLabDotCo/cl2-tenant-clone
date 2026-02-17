@@ -257,11 +257,11 @@ RSpec.describe TenantRestorer do
 
     it 'raises an error when no app_configurations row exists' do
       expect {
-        restorer.send(:validate_and_clean_app_configuration, schema_name)
+        restorer.send(:validate_and_clean_app_configuration, schema_name, 'New Name')
       }.to raise_error(RuntimeError, /No app_configurations row found in schema '#{schema_name}'/)
     end
 
-    it 'clears sensitive settings in the app_configurations row' do
+    it 'clears sensitive settings and updates name in the app_configurations row' do
       settings = {
         'core' => { 'weglot_api_key' => 'secret-key', 'timezone' => 'UTC' },
         'google_analytics' => { 'tracking_id' => 'UA-12345', 'enabled' => true },
@@ -276,13 +276,17 @@ RSpec.describe TenantRestorer do
         )
       end
 
-      restorer.send(:validate_and_clean_app_configuration, schema_name)
+      restorer.send(:validate_and_clean_app_configuration, schema_name, 'Clone Platform')
 
-      # Read back the updated settings
-      updated_settings = DatabaseHelpers.with_connection do |conn|
-        result = conn.exec("SELECT settings FROM #{schema_name}.app_configurations LIMIT 1;")
-        JSON.parse(result[0]['settings'])
+      # Read back the updated row
+      updated_row = DatabaseHelpers.with_connection do |conn|
+        result = conn.exec("SELECT name, settings FROM #{schema_name}.app_configurations LIMIT 1;")
+        result[0]
       end
+      updated_settings = JSON.parse(updated_row['settings'])
+
+      # Name column should be updated
+      expect(updated_row['name']).to eq('Clone Platform')
 
       # Sensitive keys should be cleared
       expect(updated_settings['core']).not_to have_key('weglot_api_key')
