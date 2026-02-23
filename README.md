@@ -87,8 +87,8 @@ The test suite includes unit tests and integration tests that verify the full du
 # Run all tests (includes integration tests with PostgreSQL + LocalStack)
 docker compose --profile test run --rm test bundle exec rspec
 
-# Run only unit tests (S3 operations)
-docker compose run --rm cl2-tenant-clone bundle exec rspec spec/s3_uploader_spec.rb spec/s3_files_copier_spec.rb
+# Run only unit tests (S3 operations) - note runs 'down' first to ensure fresh localstack state
+docker compose --profile test down -v 2>&1 && docker compose --profile test run --rm test bundle exec rspec spec/s3_files_copier_spec.rb
 
 # Run only integration test
 docker compose --profile test run --rm test bundle exec rspec spec/integration/
