@@ -26,7 +26,7 @@ class S3FilesCopier
     # Build copy tasks (source_key -> dest_key)
     tasks = objects.filter_map do |object|
       source_key = object.key
-      next if source_key.end_with?('/') # Skip directory markers
+      next if skip_file?(source_key)
 
       relative_path = source_key.delete_prefix(source_prefix)
       dest_key = "#{clone_id}/uploads/#{relative_path}"
@@ -50,9 +50,11 @@ class S3FilesCopier
     # Build copy tasks (source_key -> dest_key) with UUID transformation
     tasks = objects.filter_map do |object|
       source_key = object.key
-      next if source_key.end_with?('/') # Skip directory markers
+      next if skip_file?(source_key)
 
       relative_path = source_key.delete_prefix(source_prefix)
+      next if has_unmapped_uuid?(relative_path, uuid_mapping)
+
       transformed_path = transform_key_with_uuids(relative_path, uuid_mapping)
       dest_key = "uploads/#{target_tenant_id}/#{transformed_path}"
 
@@ -118,6 +120,26 @@ class S3FilesCopier
     end
 
     objects
+  end
+
+  # To save space and time we skip files we know are not used by the FE
+  def skip_file?(key)
+    filename = File.basename(key)
+    if key.end_with?('/') # Skip directory markers
+      true
+    elsif key.include?('user/avatar')
+      !filename.start_with?('medium_')
+    elsif key.match?(%r{(idea_image|project_image/image|project_folders/image|event_image/image|custom_field_option_image/image)/})
+      !filename.match?(/\A(large|medium|small)_/)
+    else
+      false
+    end
+  end
+
+  # No need to copy files that reference UUIDs in their path that are not in the database - they won't be visible in the target tenant
+  def has_unmapped_uuid?(key, uuid_mapping)
+    dir_path = File.dirname(key)
+    dir_path.scan(DatabaseHelpers::UUID_REGEX).any? { |uuid| !uuid_mapping.key?(uuid.downcase) }
   end
 
   def transform_key_with_uuids(key, uuid_mapping)
