@@ -136,9 +136,10 @@ class S3FilesCopier
     end
   end
 
-  # No need to copy files that reference UUIDs not in the database, as they won't be visible in the target tenant
+  # No need to copy files that reference UUIDs in their path that are not in the database - they won't be visible in the target tenant
   def has_unmapped_uuid?(key, uuid_mapping)
-    key.scan(DatabaseHelpers::UUID_REGEX).any? { |uuid| !uuid_mapping.key?(uuid.downcase) }
+    dir_path = File.dirname(key)
+    dir_path.scan(DatabaseHelpers::UUID_REGEX).any? { |uuid| !uuid_mapping.key?(uuid.downcase) }
   end
 
   def transform_key_with_uuids(key, uuid_mapping)
