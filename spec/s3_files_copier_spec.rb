@@ -348,14 +348,20 @@ RSpec.describe S3FilesCopier, :s3 => true do
         s3_key: "#{clone_id}/uploads/documents/#{mapped_id}/#{unmapped_id}/report.pdf"
       )
 
+      # File with unmapped UUID in actual filename - should be copied
+      clone_bucket_uploader.upload_string(
+        content: 'text image file',
+        s3_key: "#{clone_id}/uploads/text_image/#{mapped_id}/#{unmapped_id}.png"
+      )
+
       count = restore_copier.copy_from_clone_bucket(
         clone_id: clone_id,
         target_tenant_id: new_tenant_id,
         uuid_mapping: uuid_mapping
       )
 
-      # Should copy: mapped file (1) + no uuid file (1) = 2
-      expect(count).to eq(2)
+      # Should copy: mapped file (1) + no uuid file (1) + unmapped uuid in filename (1)
+      expect(count).to eq(3)
 
       # Verify mapped file was copied with transformed UUID
       content = cluster_bucket_uploader.download_string(
@@ -382,6 +388,12 @@ RSpec.describe S3FilesCopier, :s3 => true do
           s3_key: "uploads/#{new_tenant_id}/documents/#{new_mapped_id}/#{unmapped_id}/report.pdf"
         )
       end.to raise_error(Aws::S3::Errors::NoSuchKey)
+
+      # Verify file with unmapped UUID in actual filename was copied
+      content = cluster_bucket_uploader.download_string(
+        s3_key: "uploads/#{new_tenant_id}/text_image/#{new_mapped_id}/#{unmapped_id}.png"
+      )
+      expect(content).to eq('text image file')
     end
 
     it 'skips non-medium avatar files and non-sized image files during restore' do
