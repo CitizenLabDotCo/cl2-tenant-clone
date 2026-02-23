@@ -312,6 +312,78 @@ RSpec.describe S3FilesCopier, :s3 => true do
       end.to raise_error(Aws::S3::Errors::NoSuchKey)
     end
 
+    it 'skips files with UUIDs not in the uuid_mapping' do
+      clone_id = 'test-clone-unmapped'
+      new_tenant_id = 'c1c2c3c4-d5d6-7890-abcd-ef1234567890'
+
+      mapped_id = 'b2c3d4e5-f678-90ab-cdef-123456789012'
+      new_mapped_id = 'e8d7c6b5-a432-10fe-dcba-987654321098'
+      unmapped_id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+
+      uuid_mapping = {
+        mapped_id => new_mapped_id
+      }
+
+      # File with a mapped UUID - should be copied
+      clone_bucket_uploader.upload_string(
+        content: 'mapped file',
+        s3_key: "#{clone_id}/uploads/idea_image/#{mapped_id}/medium_banner.png"
+      )
+
+      # File with an unmapped UUID - should be skipped
+      clone_bucket_uploader.upload_string(
+        content: 'unmapped file',
+        s3_key: "#{clone_id}/uploads/idea_image/#{unmapped_id}/medium_banner.png"
+      )
+
+      # File with no UUIDs - should be copied
+      clone_bucket_uploader.upload_string(
+        content: 'no uuid file',
+        s3_key: "#{clone_id}/uploads/static/logo.svg"
+      )
+
+      # File with both mapped and unmapped UUIDs - should be skipped
+      clone_bucket_uploader.upload_string(
+        content: 'mixed uuid file',
+        s3_key: "#{clone_id}/uploads/documents/#{mapped_id}/#{unmapped_id}/report.pdf"
+      )
+
+      count = restore_copier.copy_from_clone_bucket(
+        clone_id: clone_id,
+        target_tenant_id: new_tenant_id,
+        uuid_mapping: uuid_mapping
+      )
+
+      # Should copy: mapped file (1) + no uuid file (1) = 2
+      expect(count).to eq(2)
+
+      # Verify mapped file was copied with transformed UUID
+      content = cluster_bucket_uploader.download_string(
+        s3_key: "uploads/#{new_tenant_id}/idea_image/#{new_mapped_id}/medium_banner.png"
+      )
+      expect(content).to eq('mapped file')
+
+      # Verify no-UUID file was copied
+      content = cluster_bucket_uploader.download_string(
+        s3_key: "uploads/#{new_tenant_id}/static/logo.svg"
+      )
+      expect(content).to eq('no uuid file')
+
+      # Verify unmapped file was NOT copied
+      expect do
+        cluster_bucket_uploader.download_string(
+          s3_key: "uploads/#{new_tenant_id}/idea_image/#{unmapped_id}/medium_banner.png"
+        )
+      end.to raise_error(Aws::S3::Errors::NoSuchKey)
+
+      # Verify mixed UUID file was NOT copied
+      expect do
+        cluster_bucket_uploader.download_string(
+          s3_key: "uploads/#{new_tenant_id}/documents/#{new_mapped_id}/#{unmapped_id}/report.pdf"
+        )
+      end.to raise_error(Aws::S3::Errors::NoSuchKey)
+    end
+
     it 'skips non-medium avatar files and non-sized image files during restore' do
       clone_id = 'test-clone-filter-restore'
       new_tenant_id = 'a1a2a3a4-b5b6-7890-abcd-ef1234567890'
