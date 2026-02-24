@@ -38,7 +38,7 @@ RSpec.describe S3FilesCopier, :s3 => true do
       )
       cluster_bucket_uploader.upload_string(
         content: 'idea banner',
-        s3_key: "uploads/#{source_tenant_id}/idea_image/large_banner.png"
+        s3_key: "uploads/#{source_tenant_id}/idea_image/image/large_banner.png"
       )
       cluster_bucket_uploader.upload_string(
         content: 'nested file',
@@ -62,7 +62,7 @@ RSpec.describe S3FilesCopier, :s3 => true do
       expect(content1).to eq('user profile pic')
 
       content2 = clone_bucket_uploader.download_string(
-        s3_key: "#{clone_id}/uploads/idea_image/large_banner.png"
+        s3_key: "#{clone_id}/uploads/idea_image/image/large_banner.png"
       )
       expect(content2).to eq('idea banner')
 
@@ -100,15 +100,15 @@ RSpec.describe S3FilesCopier, :s3 => true do
       # Idea image files - only large_, medium_, small_ should be copied
       cluster_bucket_uploader.upload_string(
         content: 'large idea',
-        s3_key: "uploads/#{source_tenant_id}/idea_image/large_banner.png"
+        s3_key: "uploads/#{source_tenant_id}/idea_image/image/large_banner.png"
       )
       cluster_bucket_uploader.upload_string(
         content: 'medium idea',
-        s3_key: "uploads/#{source_tenant_id}/idea_image/medium_banner.png"
+        s3_key: "uploads/#{source_tenant_id}/idea_image/image/medium_banner.png"
       )
       cluster_bucket_uploader.upload_string(
         content: 'small idea',
-        s3_key: "uploads/#{source_tenant_id}/idea_image/small_banner.png"
+        s3_key: "uploads/#{source_tenant_id}/idea_image/image/small_banner.png"
       )
       cluster_bucket_uploader.upload_string(
         content: 'original idea',
@@ -192,14 +192,14 @@ RSpec.describe S3FilesCopier, :s3 => true do
 
       # Verify sized idea images were copied
       content = clone_bucket_uploader.download_string(
-        s3_key: "#{clone_id}/uploads/idea_image/large_banner.png"
+        s3_key: "#{clone_id}/uploads/idea_image/image/large_banner.png"
       )
       expect(content).to eq('large idea')
 
       # Verify original idea image was NOT copied
       expect do
         clone_bucket_uploader.download_string(
-          s3_key: "#{clone_id}/uploads/idea_image/banner.png"
+          s3_key: "#{clone_id}/uploads/idea_image/image/banner.png"
         )
       end.to raise_error(Aws::S3::Errors::NoSuchKey)
 
@@ -270,7 +270,7 @@ RSpec.describe S3FilesCopier, :s3 => true do
       )
       clone_bucket_uploader.upload_string(
         content: 'idea image',
-        s3_key: "#{clone_id}/uploads/idea_image/#{old_idea_id}/medium_banner.png"
+        s3_key: "#{clone_id}/uploads/idea_image/image/#{old_idea_id}/medium_banner.png"
       )
       clone_bucket_uploader.upload_string(
         content: 'no uuid here',
@@ -294,7 +294,7 @@ RSpec.describe S3FilesCopier, :s3 => true do
       expect(content1).to eq('user avatar')
 
       content2 = cluster_bucket_uploader.download_string(
-        s3_key: "uploads/#{new_tenant_id}/idea_image/#{new_idea_id}/medium_banner.png"
+        s3_key: "uploads/#{new_tenant_id}/idea_image/image/#{new_idea_id}/medium_banner.png"
       )
       expect(content2).to eq('idea image')
 
@@ -327,13 +327,13 @@ RSpec.describe S3FilesCopier, :s3 => true do
       # File with a mapped UUID - should be copied
       clone_bucket_uploader.upload_string(
         content: 'mapped file',
-        s3_key: "#{clone_id}/uploads/idea_image/#{mapped_id}/medium_banner.png"
+        s3_key: "#{clone_id}/uploads/idea_image/image/#{mapped_id}/medium_banner.png"
       )
 
       # File with an unmapped UUID - should be skipped
       clone_bucket_uploader.upload_string(
         content: 'unmapped file',
-        s3_key: "#{clone_id}/uploads/idea_image/#{unmapped_id}/medium_banner.png"
+        s3_key: "#{clone_id}/uploads/idea_image/image/#{unmapped_id}/medium_banner.png"
       )
 
       # File with no UUIDs - should be copied
@@ -365,7 +365,7 @@ RSpec.describe S3FilesCopier, :s3 => true do
 
       # Verify mapped file was copied with transformed UUID
       content = cluster_bucket_uploader.download_string(
-        s3_key: "uploads/#{new_tenant_id}/idea_image/#{new_mapped_id}/medium_banner.png"
+        s3_key: "uploads/#{new_tenant_id}/idea_image/image/#{new_mapped_id}/medium_banner.png"
       )
       expect(content).to eq('mapped file')
 
@@ -378,7 +378,7 @@ RSpec.describe S3FilesCopier, :s3 => true do
       # Verify unmapped file was NOT copied
       expect do
         cluster_bucket_uploader.download_string(
-          s3_key: "uploads/#{new_tenant_id}/idea_image/#{unmapped_id}/medium_banner.png"
+          s3_key: "uploads/#{new_tenant_id}/idea_image/image/#{unmapped_id}/medium_banner.png"
         )
       end.to raise_error(Aws::S3::Errors::NoSuchKey)
 
@@ -414,11 +414,11 @@ RSpec.describe S3FilesCopier, :s3 => true do
       # Idea image files - only sized should be copied
       clone_bucket_uploader.upload_string(
         content: 'large idea',
-        s3_key: "#{clone_id}/uploads/idea_image/large_banner.png"
+        s3_key: "#{clone_id}/uploads/idea_image/image/large_banner.png"
       )
       clone_bucket_uploader.upload_string(
         content: 'original idea',
-        s3_key: "#{clone_id}/uploads/idea_image/banner.png"
+        s3_key: "#{clone_id}/uploads/idea_image/image/banner.png"
       )
 
       # Unrelated file
@@ -452,7 +452,7 @@ RSpec.describe S3FilesCopier, :s3 => true do
       # Verify original idea image was NOT copied
       expect do
         cluster_bucket_uploader.download_string(
-          s3_key: "uploads/#{new_tenant_id}/idea_image/banner.png"
+          s3_key: "uploads/#{new_tenant_id}/idea_image/image/banner.png"
         )
       end.to raise_error(Aws::S3::Errors::NoSuchKey)
     end
