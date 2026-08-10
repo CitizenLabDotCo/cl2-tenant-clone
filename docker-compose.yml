@@ -12,7 +12,8 @@ services:
         condition: service_started
 
   localstack:
-    image: localstack/localstack:latest
+    # Pinned to the last Apache-2.0 community release; see .circleci/config.yml for why.
+    image: localstack/localstack:4.14.0
     ports:
       - "4566:4566"
     environment:
