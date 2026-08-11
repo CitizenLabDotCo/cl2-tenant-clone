@@ -324,6 +324,19 @@ RSpec.describe TenantRestorer do
         }.to raise_error(ArgumentError, /Hyphens are not allowed/)
       end
 
+      # cl2-back refuses all of these, but we insert with raw SQL, so its model never sees them.
+      {
+        'uppercase letters' => 'Demo.govocal.com',
+        'underscores' => 'demo_test.govocal.com',
+        'spaces' => 'demo test.govocal.com'
+      }.each do |description, host|
+        it "rejects hosts containing #{description}" do
+          expect {
+            restorer.restore(clone_id, host, target_name)
+          }.to raise_error(ArgumentError, /Invalid host format.*must be lowercase letters, digits and dots/)
+        end
+      end
+
       it 'rejects hosts that already exist in public.tenants' do
         # Create an existing tenant
         DatabaseHelpers.with_connection do |conn|
