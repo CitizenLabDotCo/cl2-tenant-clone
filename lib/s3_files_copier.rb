@@ -127,9 +127,11 @@ class S3FilesCopier
     filename = File.basename(key)
     if key.end_with?('/') # Skip directory markers
       true
-    elsif key.include?('user/avatar')
+    elsif key.match?(%r{(user/avatar|volunteering/cause/image)/})
       !filename.start_with?('medium_')
-    elsif key.match?(%r{(idea_image|project_image/image|project_folders/image|event_image/image|custom_field_option_image/image)/})
+    elsif key.match?(%r{(idea_image/image|project_image/image|event_image/image)/})
+      !filename.match?(/\A(large|medium)_/)
+    elsif key.match?(%r{(project_folders/image|custom_field_option_image/image)/})
       !filename.match?(/\A(large|medium|small)_/)
     else
       false

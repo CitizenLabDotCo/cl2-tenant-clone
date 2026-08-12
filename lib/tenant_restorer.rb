@@ -11,6 +11,11 @@ require_relative 'error_reporter'
 class TenantRestorer
   AWS_CLONE_REGION = 'eu-central-1'
 
+  # Intended to be identical to cl2-admin's Tenants::HostValidator::FORMAT, so the Admin HQ form and this
+  # worker agree on what a host may contain. cl2-back rejects uppercase letters, spaces and
+  # underscores, but we insert the tenant with raw SQL, so its model never gets to.
+  HOST_FORMAT = /\A[a-z0-9]+([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]+([a-z0-9-]*[a-z0-9])?)+\z/.freeze
+
   # Sensitive settings that should be cleared when cloning a tenant.
   # Set `disable: true` for features where the cleared keys are in the
   # feature's `required-settings` (to keep settings valid after clearing).
@@ -320,6 +325,12 @@ class TenantRestorer
     # Reject hyphens - they cause SQL syntax errors in unquoted schema names
     if host.include?('-')
       raise ArgumentError, "Invalid host format: '#{host}'. Hyphens are not allowed because they cause SQL syntax errors in schema names."
+    end
+
+    # Reject anything cl2-back's Tenant model would refuse. A host that gets past here is
+    # inserted with raw SQL and becomes a row that can never be saved again - or deleted.
+    if !HOST_FORMAT.match?(host)
+      raise ArgumentError, "Invalid host format: '#{host}'. Hosts must be lowercase letters, digits and dots."
     end
 
     # Check if host already exists in tenants table (including soft-deleted)

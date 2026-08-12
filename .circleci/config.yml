@@ -39,7 +39,12 @@ jobs:
       - image: postgres:16-alpine
         environment:
           POSTGRES_PASSWORD: postgres
-      - image: localstack/localstack:latest
+      # Pinned, not `latest`: LocalStack ended its Apache-2.0 Community Edition on 2026-03-23.
+      # From 2026.3.0 the image refuses to start without LOCALSTACK_AUTH_TOKEN, and the free
+      # plans that mint one are non-commercial only. 4.14.0 is the last community release, so
+      # `latest` moving past it is what broke this job. See TAN-8466 for the longer-term choice
+      # between a paid LocalStack licence and swapping to MinIO.
+      - image: localstack/localstack:4.14.0
         environment:
           SERVICES: s3
     steps:
